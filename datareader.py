@@ -55,10 +55,11 @@ def get_bop_video_dirs(dataset):
 
 
 class YcbineoatReader:
-  def __init__(self,video_dir, downscale=1, shorter_side=None, zfar=np.inf):
+  def __init__(self,video_dir, downscale=1, shorter_side=None, zfar=np.inf, rgb_only=False):
     self.video_dir = video_dir
     self.downscale = downscale
     self.zfar = zfar
+    self.rgb_only = rgb_only
     self.color_files = sorted(glob.glob(f"{self.video_dir}/rgb/*.png"))
     self.K = np.loadtxt(f'{video_dir}/cam_K.txt').reshape(3,3)
     self.id_strs = []
@@ -66,6 +67,8 @@ class YcbineoatReader:
       id_str = os.path.basename(color_file).replace('.png','')
       self.id_strs.append(id_str)
     self.H,self.W = cv2.imread(self.color_files[0]).shape[:2]
+    if self.rgb_only:
+      logging.info("YcbineoatReader: RGB-only mode enabled, depth maps will be zero")
 
     if shorter_side is not None:
       self.downscale = shorter_side/min(self.H, self.W)
@@ -120,6 +123,10 @@ class YcbineoatReader:
     return mask
 
   def get_depth(self,i):
+    if self.rgb_only:
+      # Return zero-depth map for RGB-only mode
+      depth = np.zeros((self.H, self.W), dtype=np.float32)
+      return depth
     depth = cv2.imread(self.color_files[i].replace('rgb','depth'),-1)/1e3
     depth = cv2.resize(depth, (self.W,self.H), interpolation=cv2.INTER_NEAREST)
     depth[(depth<0.001) | (depth>=self.zfar)] = 0
@@ -153,14 +160,17 @@ class YcbineoatReader:
 
 
 class BopBaseReader:
-  def __init__(self, base_dir, zfar=np.inf, resize=1):
+  def __init__(self, base_dir, zfar=np.inf, resize=1, rgb_only=False):
     self.base_dir = base_dir
     self.resize = resize
     self.dataset_name = None
+    self.rgb_only = rgb_only
     self.color_files = sorted(glob.glob(f"{self.base_dir}/rgb/*"))
     if len(self.color_files)==0:
       self.color_files = sorted(glob.glob(f"{self.base_dir}/gray/*"))
     self.zfar = zfar
+    if self.rgb_only:
+      logging.info("BopBaseReader: RGB-only mode enabled, depth maps will be zero")
 
     self.K_table = {}
     with open(f'{self.base_dir}/scene_camera.json','r') as ff:
@@ -244,6 +254,12 @@ class BopBaseReader:
 
 
   def get_depth(self,i, filled=False):
+    if self.rgb_only:
+      # Return zero-depth map for RGB-only mode
+      color = self.get_color(i)
+      H, W = color.shape[:2]
+      depth = np.zeros((H, W), dtype=np.float32)
+      return depth
     if filled:
       depth_file = self.color_files[i].replace('rgb','depth_filled')
       depth_file = f'{os.path.dirname(depth_file)}/0{os.path.basename(depth_file)}'

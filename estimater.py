@@ -16,12 +16,15 @@ import yaml
 
 
 class FoundationPose:
-  def __init__(self, model_pts, model_normals, symmetry_tfs=None, mesh=None, scorer:ScorePredictor=None, refiner:PoseRefinePredictor=None, glctx=None, debug=0, debug_dir='/home/bowen/debug/novel_pose_debug/'):
+  def __init__(self, model_pts, model_normals, symmetry_tfs=None, mesh=None, scorer:ScorePredictor=None, refiner:PoseRefinePredictor=None, glctx=None, debug=0, debug_dir='/home/bowen/debug/novel_pose_debug/', rgb_only_mode=False):
     self.gt_pose = None
     self.ignore_normal_flip = True
     self.debug = debug
     self.debug_dir = debug_dir
+    self.rgb_only_mode = rgb_only_mode
     os.makedirs(debug_dir, exist_ok=True)
+    if self.rgb_only_mode:
+      logging.info("RGB-only mode enabled: depth maps will be set to zero, network will use RGB features only")
 
     self.reset_object(model_pts, model_normals, symmetry_tfs=symmetry_tfs, mesh=mesh)
     self.make_rotation_grid(min_n_views=40, inplane_step=60)
@@ -141,13 +144,21 @@ class FoundationPose:
       return np.zeros((3))
     uc = (us.min()+us.max())/2.0
     vc = (vs.min()+vs.max())/2.0
-    valid = mask.astype(bool) & (depth>=0.001)
-    if not valid.any():
-      logging.info(f"valid is empty")
-      return np.zeros((3))
+    
+    if self.rgb_only_mode:
+      # RGB-only mode: estimate depth from mesh scale and mask size
+      # Use mesh diameter as a rough scale estimate for depth
+      # This is a heuristic: assume object is at distance ~2-3x its diameter
+      estimated_depth = self.diameter * 2.5
+      logging.info(f"RGB-only mode: estimating depth as {estimated_depth:.4f} (mesh diameter: {self.diameter:.4f})")
+    else:
+      valid = mask.astype(bool) & (depth>=0.001)
+      if not valid.any():
+        logging.info(f"valid is empty")
+        return np.zeros((3))
+      estimated_depth = np.median(depth[valid])
 
-    zc = np.median(depth[valid])
-    center = (np.linalg.inv(K)@np.asarray([uc,vc,1]).reshape(3,1))*zc
+    center = (np.linalg.inv(K)@np.asarray([uc,vc,1]).reshape(3,1))*estimated_depth
 
     if self.debug>=2:
       pcd = toOpen3dCloud(center.reshape(1,3))
@@ -170,8 +181,12 @@ class FoundationPose:
       else:
         self.glctx = glctx
 
-    depth = erode_depth(depth, radius=2, device='cuda')
-    depth = bilateral_filter_depth(depth, radius=2, device='cuda')
+    # Skip depth filtering in RGB-only mode (depth is already zero)
+    if not self.rgb_only_mode:
+      depth = erode_depth(depth, radius=2, device='cuda')
+      depth = bilateral_filter_depth(depth, radius=2, device='cuda')
+    else:
+      logging.info("RGB-only mode: skipping depth filtering")
 
     if self.debug>=2:
       xyz_map = depth2xyzmap(depth, K)
@@ -212,6 +227,12 @@ class FoundationPose:
     logging.info(f"after viewpoint, add_errs min:{add_errs.min()}")
 
     xyz_map = depth2xyzmap(depth, K)
+    if self.rgb_only_mode:
+      # Verify xyz_map is all zeros in RGB-only mode
+      if np.abs(xyz_map).max() > 1e-6:
+        logging.warning(f"RGB-only mode: xyz_map should be zero but max value is {np.abs(xyz_map).max()}")
+      else:
+        logging.info("RGB-only mode: xyz_map is zero, network will use RGB features only")
     poses, vis = self.refiner.predict(mesh=self.mesh, mesh_tensors=self.mesh_tensors, rgb=rgb, depth=depth, K=K, ob_in_cams=poses.data.cpu().numpy(), normal_map=normal_map, xyz_map=xyz_map, glctx=self.glctx, mesh_diameter=self.diameter, iteration=iteration, get_vis=self.debug>=2)
     if vis is not None:
       imageio.imwrite(f'{self.debug_dir}/vis_refiner.png', vis)
@@ -254,11 +275,23 @@ class FoundationPose:
     logging.info("Welcome")
 
     depth = torch.as_tensor(depth, device='cuda', dtype=torch.float)
-    depth = erode_depth(depth, radius=2, device='cuda')
-    depth = bilateral_filter_depth(depth, radius=2, device='cuda')
-    logging.info("depth processing done")
+    # Skip depth filtering in RGB-only mode (depth is already zero)
+    if not self.rgb_only_mode:
+      depth = erode_depth(depth, radius=2, device='cuda')
+      depth = bilateral_filter_depth(depth, radius=2, device='cuda')
+      logging.info("depth processing done")
+    else:
+      logging.info("RGB-only mode: skipping depth filtering")
 
-    xyz_map = depth2xyzmap_batch(depth[None], torch.as_tensor(K, dtype=torch.float, device='cuda')[None], zfar=np.inf)[0]
+    xyz_map_torch = depth2xyzmap_batch(depth[None], torch.as_tensor(K, dtype=torch.float, device='cuda')[None], zfar=np.inf)[0]
+    xyz_map = xyz_map_torch.data.cpu().numpy()
+    
+    if self.rgb_only_mode:
+      # Verify xyz_map is all zeros in RGB-only mode
+      if np.abs(xyz_map).max() > 1e-6:
+        logging.warning(f"RGB-only mode: xyz_map should be zero but max value is {np.abs(xyz_map).max()}")
+      else:
+        logging.info("RGB-only mode: xyz_map is zero, network will use RGB features only")
 
     pose, vis = self.refiner.predict(mesh=self.mesh, mesh_tensors=self.mesh_tensors, rgb=rgb, depth=depth, K=K, ob_in_cams=self.pose_last.reshape(1,4,4).data.cpu().numpy(), normal_map=None, xyz_map=xyz_map, mesh_diameter=self.diameter, glctx=self.glctx, iteration=iteration, get_vis=self.debug>=2)
     logging.info("pose done")
