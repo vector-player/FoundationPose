@@ -53,6 +53,7 @@ xvfb-run -a python run_demo.py --rgb_only \
   --test_scene_dir demo_data/mustard0 \
   --debug 2
 ```
+![](./docs/feature_of_rgb_only/vis_rgb_only.gif)
 
 ### With Custom Parameters
 
