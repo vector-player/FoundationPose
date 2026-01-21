@@ -1,5 +1,5 @@
 # RGB-Only Mode Feature Documentation
-A implementation of ![plan_of_rgb-only_mode](./feature_of_rgb_only/rgb-only_mode_implementation_db5c9b16.plan.md)
+An implementation of [plan_of_rgb-only_mode](./rgb-only_mode_implementation_db5c9b16.plan.md)
 
 ## Overview
 

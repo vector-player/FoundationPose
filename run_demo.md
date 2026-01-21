@@ -2,14 +2,17 @@
 
 ## Overview
 
-`run_demo.py` is a demonstration script for FoundationPose, a 6D object pose estimation and tracking system. The script processes a sequence of RGB-D images to register and track the pose of a 3D object model.
+`run_demo.py` is a demonstration script for FoundationPose, a 6D object pose estimation and tracking system. The script processes a sequence of RGB-D images (or RGB-only images) to register and track the pose of a 3D object model.
 
 ## Use Cases
 
 1. **Object Pose Registration**: Initial pose estimation from the first frame using RGB-D data
 2. **Object Pose Tracking**: Sequential tracking of object pose across video frames
-3. **Debugging and Visualization**: Visual inspection of pose estimation results
-4. **Evaluation**: Testing pose estimation accuracy on custom datasets
+3. **RGB-Only Pose Estimation**: Pose estimation and tracking without depth sensor (using `--rgb_only` flag)
+4. **Debugging and Visualization**: Visual inspection of pose estimation results
+5. **Evaluation**: Testing pose estimation accuracy on custom datasets
+6. **Consumer Applications**: Using standard RGB cameras (webcams, smartphones) without depth sensors
+7. **Mobile Robotics**: Pose tracking in environments where depth sensors are unavailable or unreliable
 
 ## Command Line Arguments
 
@@ -21,6 +24,7 @@
 | `--track_refine_iter` | int | 2 | Number of refinement iterations for pose tracking |
 | `--debug` | int | 1 | Debug level (0-3): controls visualization and output verbosity |
 | `--debug_dir` | str | `debug` | Output directory for debug files and visualizations |
+| `--rgb_only` | flag | False | Enable RGB-only mode (no depth sensor required). Depth maps will be set to zero and network will use RGB features only |
 
 ### Debug Levels
 
@@ -31,15 +35,29 @@
 
 ## Basic Usage
 
-### Standard Execution (with display)
+### Standard Execution (RGB-D Mode with display)
 
 ```bash
 python run_demo.py --mesh_file path/to/mesh.obj --test_scene_dir path/to/scene
 ```
 
+### RGB-Only Mode Execution
+
+```bash
+# Basic RGB-only mode
+python run_demo.py --rgb_only --mesh_file path/to/mesh.obj --test_scene_dir path/to/scene
+
+# RGB-only mode with visualization (headless)
+xvfb-run -a python run_demo.py --rgb_only \
+  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
+  --test_scene_dir demo_data/mustard0 \
+  --debug 2
+```
+
 ### With Custom Parameters
 
 ```bash
+# RGB-D mode
 python run_demo.py \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
@@ -47,6 +65,16 @@ python run_demo.py \
   --track_refine_iter 5 \
   --debug 2 \
   --debug_dir ./output
+
+# RGB-only mode with more refinement iterations
+python run_demo.py \
+  --rgb_only \
+  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
+  --test_scene_dir demo_data/mustard0 \
+  --est_refine_iter 10 \
+  --track_refine_iter 5 \
+  --debug 2 \
+  --debug_dir ./output_rgb_only
 ```
 
 ## Running in Headless Environments
@@ -234,7 +262,9 @@ The script generates the following outputs in `debug_dir`:
 - **`model_tf.obj`**: Transformed mesh model (when `debug >= 3`)
 - **`scene_complete.ply`**: Scene point cloud (when `debug >= 3`)
 
-## Example Workflow
+## Example Workflows
+
+### Workflow 1: RGB-D Mode (Standard)
 
 ```bash
 # 1. Activate conda environment
@@ -250,7 +280,106 @@ xvfb-run -a python run_demo.py \
 # 3. Check results
 ls ./results/track_vis/     # Visualization images
 ls ./results/ob_in_cam/     # Pose files
+ls ./results/depth.png      # Depth image (RGB-D mode only)
 ```
+
+### Workflow 2: RGB-Only Mode
+
+```bash
+# 1. Activate conda environment
+conda activate foundationpose
+
+# 2. Run RGB-only mode with virtual display (headless)
+xvfb-run -a python run_demo.py \
+  --rgb_only \
+  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
+  --test_scene_dir demo_data/mustard0 \
+  --debug 2 \
+  --est_refine_iter 5 \
+  --track_refine_iter 2 \
+  --debug_dir ./results_rgb_only
+
+# 3. Check results
+ls ./results_rgb_only/track_vis/     # Visualization images
+ls ./results_rgb_only/ob_in_cam/     # Pose files
+# Note: depth.png will NOT exist in RGB-only mode
+```
+
+### Workflow 3: RGB-Only Mode for Quick Testing
+
+```bash
+# Quick test without visualization (fastest)
+python run_demo.py \
+  --rgb_only \
+  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
+  --test_scene_dir demo_data/mustard0 \
+  --debug 0 \
+  --est_refine_iter 2 \
+  --track_refine_iter 1
+
+# Check pose files only
+ls debug/ob_in_cam/
+```
+
+### Workflow 4: RGB-Only Mode with Full Visualization
+
+```bash
+# Generate complete visualization set
+xvfb-run -a python run_demo.py \
+  --rgb_only \
+  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
+  --test_scene_dir demo_data/mustard0 \
+  --debug 2 \
+  --est_refine_iter 5 \
+  --track_refine_iter 2 \
+  --debug_dir ./rgb_only_vis
+
+# Create GIF animation from visualizations
+cd rgb_only_vis/track_vis
+ffmpeg -y -framerate 10 -pattern_type glob -i '*.png' \
+  -vf "scale=640:-1:flags=lanczos" -c:v gif ../tracking_animation.gif
+```
+
+## RGB-Only Mode Use Cases
+
+### When to Use RGB-Only Mode
+
+1. **No Depth Sensor Available**
+   - Standard RGB cameras (webcams, smartphones)
+   - Consumer devices without depth capabilities
+   - Legacy camera systems
+
+2. **Depth Sensor Unreliable**
+   - Poor lighting conditions affecting depth sensors
+   - Reflective or transparent surfaces
+   - Outdoor environments with sunlight interference
+
+3. **Cost Constraints**
+   - Avoiding expensive RGB-D cameras
+   - Using existing RGB camera infrastructure
+   - Mobile/embedded applications
+
+4. **Privacy Concerns**
+   - Applications where depth data collection is restricted
+   - Public-facing systems
+
+### RGB-Only Mode Characteristics
+
+| Aspect | RGB-D Mode | RGB-Only Mode |
+|--------|------------|---------------|
+| **Input Requirements** | RGB + Depth | RGB only |
+| **Translation Accuracy** | High (metric) | Moderate (relative) |
+| **Initialization** | Robust | May need more iterations |
+| **Tracking Quality** | Excellent | Good |
+| **Hardware Requirements** | RGB-D camera | Standard RGB camera |
+| **Use Cases** | Industrial, robotics | Consumer, webcam, mobile |
+
+### RGB-Only Mode Recommendations
+
+- **Refinement Iterations**: Use `--est_refine_iter 5-10` for better initial pose estimation
+- **Tracking Iterations**: `--track_refine_iter 2` is usually sufficient
+- **Visualization**: Use `--debug 2` with Xvfb to generate verification images
+- **Accuracy**: Expect slightly lower accuracy than depth-based mode, especially for absolute translation
 
 ## Troubleshooting
 
@@ -270,9 +399,35 @@ Xvfb :99 -screen 0 1024x768x24 &
 ### Issue: Want visualization but no display
 **Solution**: Use `debug=2` with Xvfb to save images without displaying them
 
+### Issue: RGB-only mode poor pose accuracy
+**Solution**: 
+- Increase `--est_refine_iter` to 10-15
+- Ensure good object mask quality
+- Verify mesh scale is correct
+- Check camera intrinsics
+
+### Issue: RGB-only mode translation seems incorrect
+**Solution**:
+- This is expected - translation estimation without depth is less accurate
+- Translation uses heuristic based on mesh diameter
+- Consider using more refinement iterations
+- Verify camera intrinsics are correct
+
+### Issue: RGB-only mode crashes during visualization
+**Solution**: Ensure you have the latest code with RGB-only mode visualization fixes (Issue #2 resolved)
+
 ## Notes
 
 - The script processes frames sequentially and tracks object pose across the sequence
 - First frame uses registration (`est.register()`), subsequent frames use tracking (`est.track_one()`)
 - Pose outputs are saved as 4x4 transformation matrices in `ob_in_cam/` directory
 - Visualization shows 3D bounding box and coordinate axes overlaid on the RGB image
+- **RGB-only mode**: When `--rgb_only` is enabled, depth maps are set to zero and the network falls back to RGB features only
+- **RGB-only mode**: Translation estimation uses mesh diameter heuristic (~2.5x mesh diameter)
+- **RGB-only mode**: No `depth.png` file is generated in debug output (confirms RGB-only mode)
+
+## Additional Resources
+
+- **RGB-Only Mode Documentation**: See `docs/feature_of_rgb_only/feature_of_rgb_only.md` for detailed information
+- **Visualization Guide**: See `docs/feature_of_rgb_only/VISUALIZATION_OUTPUTS.md` for visualization details
+- **Test Results**: See `docs/feature_of_rgb_only/RUNTIME_TEST_RESULTS.md` for test results and use cases
