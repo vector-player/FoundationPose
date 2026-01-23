@@ -12,11 +12,130 @@ from datareader import *
 import argparse
 
 
+def find_mesh_file(test_scene_dir, mesh_file=None):
+  """
+  Auto-detect mesh file from test_scene_dir if mesh_file is not explicitly provided.
+  
+  Search order:
+  1. If mesh_file is provided and exists, use it
+  2. {test_scene_dir}/mesh/textured_simple.obj (common pattern for demo_data)
+  3. {test_scene_dir}/mesh/*.obj (if exactly one .obj file exists)
+  4. {test_scene_dir}/../mesh/*.obj (if test_scene_dir is a subdirectory)
+  5. Default fallback to demo_data/mustard0/mesh/textured_simple.obj
+  
+  Returns:
+    str: Path to mesh file
+  """
+  code_dir = os.path.dirname(os.path.realpath(__file__))
+  default_mesh = f'{code_dir}/demo_data/mustard0/mesh/textured_simple.obj'
+  
+  # If mesh_file is explicitly provided and exists, use it
+  if mesh_file and os.path.exists(mesh_file):
+    return mesh_file
+  
+  # Normalize test_scene_dir path
+  test_scene_dir = os.path.abspath(test_scene_dir)
+  
+  # Track searched locations for user feedback
+  searched_locations = []
+  
+  # Try common patterns
+  candidates = [
+    # Pattern 1: {test_scene_dir}/mesh/textured_simple.obj (most common)
+    os.path.join(test_scene_dir, 'mesh', 'textured_simple.obj'),
+    # Pattern 3: {test_scene_dir}/../mesh/textured_simple.obj (parent directory)
+    os.path.join(os.path.dirname(test_scene_dir), 'mesh', 'textured_simple.obj'),
+  ]
+  
+  # Check Pattern 1 and Pattern 3 first
+  for candidate in candidates:
+    searched_locations.append(candidate)
+    if os.path.exists(candidate):
+      logging.info(f"[OK] Auto-detected mesh file: {candidate}")
+      return candidate
+  
+  # Pattern 2: Check if there's exactly one .obj file in mesh directory
+  mesh_dir = os.path.join(test_scene_dir, 'mesh')
+  searched_locations.append(f"{mesh_dir}/*.obj")
+  if os.path.isdir(mesh_dir):
+    obj_files = [f for f in os.listdir(mesh_dir) if f.endswith('.obj')]
+    if len(obj_files) == 1:
+      candidate = os.path.join(mesh_dir, obj_files[0])
+      logging.info(f"[OK] Auto-detected mesh file: {candidate}")
+      return candidate
+    elif len(obj_files) > 1:
+      logging.warning(f"Found {len(obj_files)} .obj files in {mesh_dir}, cannot auto-select. Please specify --mesh_file")
+      logging.info(f"  Available mesh files: {', '.join(obj_files)}")
+  
+  # Check parent directory mesh folder
+  parent_mesh_dir = os.path.join(os.path.dirname(test_scene_dir), 'mesh')
+  searched_locations.append(f"{parent_mesh_dir}/*.obj")
+  if os.path.isdir(parent_mesh_dir):
+    obj_files = [f for f in os.listdir(parent_mesh_dir) if f.endswith('.obj')]
+    if len(obj_files) == 1:
+      candidate = os.path.join(parent_mesh_dir, obj_files[0])
+      logging.info(f"[OK] Auto-detected mesh file: {candidate}")
+      return candidate
+  
+  # Provide helpful hints when mesh file cannot be found
+  print("\n" + "="*70)
+  print("WARNING: MESH FILE AUTO-DETECTION FAILED")
+  print("="*70)
+  print(f"Could not find mesh file for input directory: {test_scene_dir}\n")
+  print("Searched locations:")
+  for i, loc in enumerate(searched_locations, 1):
+    exists = os.path.exists(loc) if not loc.endswith('/*.obj') else os.path.isdir(os.path.dirname(loc))
+    status = "[EXISTS]" if exists else "[NOT FOUND]"
+    print(f"  {i}. {loc} {status}")
+  
+  # Check if input directory exists and list its contents
+  if os.path.isdir(test_scene_dir):
+    print(f"\nContents of input directory ({test_scene_dir}):")
+    try:
+      contents = os.listdir(test_scene_dir)
+      if contents:
+        for item in sorted(contents)[:10]:  # Show first 10 items
+          item_path = os.path.join(test_scene_dir, item)
+          item_type = "[DIR]" if os.path.isdir(item_path) else "[FILE]"
+          print(f"  {item_type}  {item}")
+        if len(contents) > 10:
+          print(f"  ... and {len(contents) - 10} more items")
+      else:
+        print("  (empty directory)")
+    except PermissionError:
+      print("  (permission denied)")
+  else:
+    print(f"\nWARNING: input directory does not exist: {test_scene_dir}")
+  
+  print("\nSUGGESTIONS:")
+  print("  1. Create a 'mesh' subdirectory in your input directory and place your .obj file there:")
+  print(f"     mkdir -p {test_scene_dir}/mesh")
+  print(f"     # Then copy your mesh.obj file to {test_scene_dir}/mesh/")
+  print("\n  2. Or specify the mesh file explicitly using --mesh_file:")
+  print("     python run.py --mesh_file /path/to/your/mesh.obj --inputs <path>")
+  print("     # or")
+  print("     python run.py --mesh_file /path/to/your/mesh.obj --test_scene_dir <path>")
+  print("\n  3. Expected directory structure:")
+  print("     input_directory/")
+  print("     ├── rgb/          (RGB images)")
+  print("     ├── depth/        (depth images, optional)")
+  print("     ├── mesh/         (mesh files)")
+  print("     │   └── *.obj")
+  print("     └── cam_K.txt     (camera intrinsics)")
+  print("="*70 + "\n")
+  
+  # Fallback to default
+  logging.warning(f"Using default mesh file: {default_mesh}")
+  logging.warning("This may not match your test scene. Please specify --mesh_file for accurate results.")
+  return default_mesh
+
+
 if __name__=='__main__':
   parser = argparse.ArgumentParser()
   code_dir = os.path.dirname(os.path.realpath(__file__))
-  parser.add_argument('--mesh_file', type=str, default=f'{code_dir}/demo_data/mustard0/mesh/textured_simple.obj')
-  parser.add_argument('--test_scene_dir', type=str, default=f'{code_dir}/demo_data/mustard0')
+  parser.add_argument('--mesh_file', type=str, default=None, help='Path to the 3D mesh file (.obj format). If not provided, will auto-detect from --test_scene_dir or --inputs.')
+  parser.add_argument('--test_scene_dir', type=str, default=None, help='Directory containing test scene RGB-D images. Alias for --inputs.')
+  parser.add_argument('--inputs', type=str, default=None, help='Directory containing test scene RGB-D images. Same as --test_scene_dir. If both are provided, --inputs takes precedence.')
   parser.add_argument('--est_refine_iter', type=int, default=5)
   parser.add_argument('--track_refine_iter', type=int, default=2)
   parser.add_argument('--debug', type=int, default=1)
@@ -27,7 +146,23 @@ if __name__=='__main__':
   set_logging_format()
   set_seed(0)
 
-  mesh = trimesh.load(args.mesh_file)
+  # Determine which input directory to use: --inputs takes precedence over --test_scene_dir
+  # If neither is provided, use default
+  if args.inputs:
+    test_scene_dir = args.inputs
+  elif args.test_scene_dir:
+    test_scene_dir = args.test_scene_dir
+  else:
+    test_scene_dir = f'{code_dir}/demo_data/mustard0'
+    logging.info(f"No input directory specified, using default: {test_scene_dir}")
+
+  # Warn if both are provided
+  if args.inputs and args.test_scene_dir:
+    logging.warning(f"Both --inputs and --test_scene_dir provided. Using --inputs: {args.inputs}")
+
+  # Auto-detect mesh file if not explicitly provided
+  mesh_file = find_mesh_file(test_scene_dir, args.mesh_file)
+  mesh = trimesh.load(mesh_file)
 
   debug = args.debug
   debug_dir = args.debug_dir
@@ -42,7 +177,7 @@ if __name__=='__main__':
   est = FoundationPose(model_pts=mesh.vertices, model_normals=mesh.vertex_normals, mesh=mesh, scorer=scorer, refiner=refiner, debug_dir=debug_dir, debug=debug, glctx=glctx, rgb_only_mode=args.rgb_only)
   logging.info("estimator initialization done")
 
-  reader = YcbineoatReader(video_dir=args.test_scene_dir, shorter_side=None, zfar=np.inf, rgb_only=args.rgb_only)
+  reader = YcbineoatReader(video_dir=test_scene_dir, shorter_side=None, zfar=np.inf, rgb_only=args.rgb_only)
 
   for i in range(len(reader.color_files)):
     logging.info(f'i:{i}')

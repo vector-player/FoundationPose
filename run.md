@@ -18,8 +18,9 @@
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
-| `--mesh_file` | str | `demo_data/mustard0/mesh/textured_simple.obj` | Path to the 3D mesh file (.obj format) |
-| `--test_scene_dir` | str | `demo_data/mustard0` | Directory containing test scene RGB-D images |
+| `--mesh_file` | str | `None` (auto-detected) | Path to the 3D mesh file (.obj format). If not provided, will auto-detect from `--test_scene_dir` or `--inputs` by searching common locations: `{input_dir}/mesh/textured_simple.obj`, `{input_dir}/mesh/*.obj`, or `{input_dir}/../mesh/*.obj` |
+| `--test_scene_dir` | str | `demo_data/mustard0` | Directory containing test scene RGB-D images. Alias for `--inputs`. If both are provided, `--inputs` takes precedence. |
+| `--inputs` | str | `demo_data/mustard0` | Directory containing test scene RGB-D images. Same as `--test_scene_dir`. If both are provided, `--inputs` takes precedence. |
 | `--est_refine_iter` | int | 5 | Number of refinement iterations for initial pose estimation |
 | `--track_refine_iter` | int | 2 | Number of refinement iterations for pose tracking |
 | `--debug` | int | 1 | Debug level (0-3): controls visualization and output verbosity |
@@ -38,18 +39,36 @@
 ### Standard Execution (RGB-D Mode with display)
 
 ```bash
+# With auto-detection (mesh file found automatically from input directory)
+python run.py --inputs path/to/scene
+# or
+python run.py --test_scene_dir path/to/scene
+
+# With explicit mesh file (overrides auto-detection)
+python run.py --mesh_file path/to/mesh.obj --inputs path/to/scene
+# or
 python run.py --mesh_file path/to/mesh.obj --test_scene_dir path/to/scene
 ```
 
 ### RGB-Only Mode Execution
 
 ```bash
-# Basic RGB-only mode
+# Basic RGB-only mode (mesh auto-detected from input directory)
+python run.py --rgb_only --inputs path/to/scene
+# or
+python run.py --rgb_only --test_scene_dir path/to/scene
+
+# RGB-only mode with explicit mesh file
+python run.py --rgb_only --mesh_file path/to/mesh.obj --inputs path/to/scene
+# or
 python run.py --rgb_only --mesh_file path/to/mesh.obj --test_scene_dir path/to/scene
 
-# RGB-only mode with visualization (headless)
+# RGB-only mode with visualization (headless, auto-detected mesh)
 xvfb-run -a python run.py --rgb_only \
-  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
+  --inputs demo_data/mustard0 \
+  --debug 2
+# or
+xvfb-run -a python run.py --rgb_only \
   --test_scene_dir demo_data/mustard0 \
   --debug 2
 ```
@@ -58,24 +77,24 @@ xvfb-run -a python run.py --rgb_only \
 ### With Custom Parameters
 
 ```bash
-# RGB-D mode
+# RGB-D mode (mesh auto-detected)
 python run.py \
-  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
-  --test_scene_dir demo_data/mustard0 \
+  --inputs demo_data/mustard0 \
   --est_refine_iter 10 \
   --track_refine_iter 5 \
   --debug 2 \
   --debug_dir ./output
+# or use --test_scene_dir instead of --inputs
 
-# RGB-only mode with more refinement iterations
+# RGB-only mode with more refinement iterations (mesh auto-detected)
 python run.py \
   --rgb_only \
-  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
-  --test_scene_dir demo_data/mustard0 \
+  --inputs demo_data/mustard0 \
   --est_refine_iter 10 \
   --track_refine_iter 5 \
   --debug 2 \
   --debug_dir ./output_rgb_only
+# or use --test_scene_dir instead of --inputs
 ```
 
 ## Running in Headless Environments
@@ -271,9 +290,8 @@ The script generates the following outputs in `debug_dir`:
 # 1. Activate conda environment
 conda activate foundationpose
 
-# 2. Run with virtual display (headless)
+# 2. Run with virtual display (headless, mesh auto-detected)
 xvfb-run -a python run.py \
-  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 2 \
   --debug_dir ./results
@@ -290,10 +308,9 @@ ls ./results/depth.png      # Depth image (RGB-D mode only)
 # 1. Activate conda environment
 conda activate foundationpose
 
-# 2. Run RGB-only mode with virtual display (headless)
+# 2. Run RGB-only mode with virtual display (headless, mesh auto-detected)
 xvfb-run -a python run.py \
   --rgb_only \
-  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 2 \
   --est_refine_iter 5 \
@@ -309,10 +326,9 @@ ls ./results_rgb_only/ob_in_cam/     # Pose files
 ### Workflow 3: RGB-Only Mode for Quick Testing
 
 ```bash
-# Quick test without visualization (fastest)
+# Quick test without visualization (fastest, mesh auto-detected)
 python run.py \
   --rgb_only \
-  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 0 \
   --est_refine_iter 2 \
@@ -325,10 +341,9 @@ ls debug/ob_in_cam/
 ### Workflow 4: RGB-Only Mode with Full Visualization
 
 ```bash
-# Generate complete visualization set
+# Generate complete visualization set (mesh auto-detected)
 xvfb-run -a python run.py \
   --rgb_only \
-  --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 2 \
   --est_refine_iter 5 \
@@ -423,6 +438,11 @@ Xvfb :99 -screen 0 1024x768x24 &
 - First frame uses registration (`est.register()`), subsequent frames use tracking (`est.track_one()`)
 - Pose outputs are saved as 4x4 transformation matrices in `ob_in_cam/` directory
 - Visualization shows 3D bounding box and coordinate axes overlaid on the RGB image
+- **Mesh file auto-detection**: If `--mesh_file` is not provided, the script automatically searches for mesh files in common locations relative to `--inputs` or `--test_scene_dir`:
+  - `{test_scene_dir}/mesh/textured_simple.obj` (most common pattern)
+  - `{test_scene_dir}/mesh/*.obj` (if exactly one .obj file exists)
+  - `{test_scene_dir}/../mesh/*.obj` (parent directory)
+  - Falls back to default `demo_data/mustard0/mesh/textured_simple.obj` if none found
 - **RGB-only mode**: When `--rgb_only` is enabled, depth maps are set to zero and the network falls back to RGB features only
 - **RGB-only mode**: Translation estimation uses mesh diameter heuristic (~2.5x mesh diameter)
 - **RGB-only mode**: No `depth.png` file is generated in debug output (confirms RGB-only mode)
