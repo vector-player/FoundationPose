@@ -21,7 +21,7 @@ This implementation is based on research findings from RGBTrack and related work
 Enable RGB-only mode using the `--rgb_only` flag:
 
 ```bash
-python run_demo.py --rgb_only --mesh_file path/to/mesh.obj --test_scene_dir path/to/scene
+python run.py --rgb_only --mesh_file path/to/mesh.obj --test_scene_dir path/to/scene
 ```
 
 ### Programmatic Usage
@@ -143,13 +143,13 @@ RGB-only mode is supported in:
 
 ```bash
 # Standard RGB-D mode
-python run_demo.py \
+python run.py \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 2
 
 # RGB-only mode
-python run_demo.py \
+python run.py \
   --rgb_only \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \

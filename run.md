@@ -1,8 +1,8 @@
-# run_demo.py Usage Guide
+# run.py Usage Guide
 
 ## Overview
 
-`run_demo.py` is a demonstration script for FoundationPose, a 6D object pose estimation and tracking system. The script processes a sequence of RGB-D images (or RGB-only images) to register and track the pose of a 3D object model.
+`run.py` is a demonstration script for FoundationPose, a 6D object pose estimation and tracking system. The script processes a sequence of RGB-D images (or RGB-only images) to register and track the pose of a 3D object model.
 
 ## Use Cases
 
@@ -38,17 +38,17 @@
 ### Standard Execution (RGB-D Mode with display)
 
 ```bash
-python run_demo.py --mesh_file path/to/mesh.obj --test_scene_dir path/to/scene
+python run.py --mesh_file path/to/mesh.obj --test_scene_dir path/to/scene
 ```
 
 ### RGB-Only Mode Execution
 
 ```bash
 # Basic RGB-only mode
-python run_demo.py --rgb_only --mesh_file path/to/mesh.obj --test_scene_dir path/to/scene
+python run.py --rgb_only --mesh_file path/to/mesh.obj --test_scene_dir path/to/scene
 
 # RGB-only mode with visualization (headless)
-xvfb-run -a python run_demo.py --rgb_only \
+xvfb-run -a python run.py --rgb_only \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 2
@@ -59,7 +59,7 @@ xvfb-run -a python run_demo.py --rgb_only \
 
 ```bash
 # RGB-D mode
-python run_demo.py \
+python run.py \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --est_refine_iter 10 \
@@ -68,7 +68,7 @@ python run_demo.py \
   --debug_dir ./output
 
 # RGB-only mode with more refinement iterations
-python run_demo.py \
+python run.py \
   --rgb_only \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
@@ -80,7 +80,7 @@ python run_demo.py \
 
 ## Running in Headless Environments
 
-When running `run_demo.py` in headless environments (Docker containers, SSH sessions without X11 forwarding, or servers without displays), the script will fail with a Qt/X11 display error when `debug >= 1` because it attempts to open a visualization window using `cv2.imshow()`.
+When running `run.py` in headless environments (Docker containers, SSH sessions without X11 forwarding, or servers without displays), the script will fail with a Qt/X11 display error when `debug >= 1` because it attempts to open a visualization window using `cv2.imshow()`.
 
 ### Error Message
 
@@ -112,7 +112,7 @@ sudo yum install xorg-x11-server-Xvfb
 **Option A: Using xvfb-run (simplest)**
 
 ```bash
-xvfb-run -a python run_demo.py --debug 2
+xvfb-run -a python run.py --debug 2
 ```
 
 The `-a` flag automatically selects a display number.
@@ -127,7 +127,7 @@ Xvfb :99 -screen 0 1024x768x24 &
 export DISPLAY=:99
 
 # Run your script
-python run_demo.py --debug 2
+python run.py --debug 2
 
 # Clean up (optional)
 killall Xvfb
@@ -136,7 +136,7 @@ killall Xvfb
 **Option C: Using Xvfb with specific display number**
 
 ```bash
-xvfb-run --server-args="-screen 0 1920x1080x24" -a python run_demo.py --debug 2
+xvfb-run --server-args="-screen 0 1920x1080x24" -a python run.py --debug 2
 ```
 
 #### Advantages
@@ -154,7 +154,7 @@ xvfb-run --server-args="-screen 0 1920x1080x24" -a python run_demo.py --debug 2
 If visualization is not needed, simply set `debug=0` to skip the `cv2.imshow()` calls:
 
 ```bash
-python run_demo.py --debug 0
+python run.py --debug 0
 ```
 
 For saving visualization images without displaying them, you can modify the script to skip `cv2.imshow()` calls, or use `debug=2` with Xvfb.
@@ -180,7 +180,7 @@ ssh -X username@hostname
 ssh -Y username@hostname
 
 # Then run normally
-python run_demo.py --debug 2
+python run.py --debug 2
 ```
 
 #### Prerequisites
@@ -202,7 +202,7 @@ If an X server is available on a different display:
 
 ```bash
 export DISPLAY=:0  # or :1, :2, etc.
-python run_demo.py --debug 2
+python run.py --debug 2
 ```
 
 #### Advantages
@@ -214,7 +214,7 @@ python run_demo.py --debug 2
 
 ### Solution 5: Modify Script to Skip cv2.imshow()
 
-For a permanent solution, you can modify `run_demo.py` to conditionally skip visualization based on an environment variable:
+For a permanent solution, you can modify `run.py` to conditionally skip visualization based on an environment variable:
 
 ```python
 # Add at the top
@@ -230,7 +230,7 @@ Then run with `DISPLAY` unset or empty:
 
 ```bash
 unset DISPLAY
-python run_demo.py --debug 2  # Will save images but not display
+python run.py --debug 2  # Will save images but not display
 ```
 
 ## Recommended Approach for Docker
@@ -242,7 +242,7 @@ For Docker containers, use Xvfb:
 RUN apt-get update && apt-get install -y xvfb
 
 # At runtime
-CMD ["xvfb-run", "-a", "python", "run_demo.py", "--debug", "2"]
+CMD ["xvfb-run", "-a", "python", "run.py", "--debug", "2"]
 ```
 
 Or use docker-compose:
@@ -251,7 +251,7 @@ Or use docker-compose:
 services:
   foundationpose:
     image: your-image
-    command: xvfb-run -a python run_demo.py --debug 2
+    command: xvfb-run -a python run.py --debug 2
 ```
 
 ## Output Files
@@ -272,7 +272,7 @@ The script generates the following outputs in `debug_dir`:
 conda activate foundationpose
 
 # 2. Run with virtual display (headless)
-xvfb-run -a python run_demo.py \
+xvfb-run -a python run.py \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 2 \
@@ -291,7 +291,7 @@ ls ./results/depth.png      # Depth image (RGB-D mode only)
 conda activate foundationpose
 
 # 2. Run RGB-only mode with virtual display (headless)
-xvfb-run -a python run_demo.py \
+xvfb-run -a python run.py \
   --rgb_only \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
@@ -310,7 +310,7 @@ ls ./results_rgb_only/ob_in_cam/     # Pose files
 
 ```bash
 # Quick test without visualization (fastest)
-python run_demo.py \
+python run.py \
   --rgb_only \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
@@ -326,7 +326,7 @@ ls debug/ob_in_cam/
 
 ```bash
 # Generate complete visualization set
-xvfb-run -a python run_demo.py \
+xvfb-run -a python run.py \
   --rgb_only \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \

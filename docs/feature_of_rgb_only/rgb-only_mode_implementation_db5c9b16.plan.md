@@ -15,7 +15,7 @@ todos:
     content: Skip depth filtering (erode/bilateral) when in RGB-only mode
     status: completed
   - id: add-cli-argument
-    content: Add --rgb_only command-line argument to run_demo.py
+    content: Add --rgb_only command-line argument to run.py
     status: completed
   - id: verify-network-input
     content: Verify network input handling works correctly with zero xyz_map (should fall back to RGB)
@@ -89,7 +89,7 @@ Based on the research documents:
   - Ensure same resolution as RGB images
 
 #### 1.3 Update Command-Line Interface
-- **File**: `run_demo.py`
+- **File**: `run.py`
 - **Changes**:
   - Add `--rgb_only` flag (boolean, default=False)
   - Pass flag to estimator and data reader initialization
@@ -173,7 +173,7 @@ def guess_translation(self, depth, mask, K):
 ### Phase 6: Testing and Validation
 
 #### 6.1 Update Demo Script
-- **File**: `run_demo.py`
+- **File**: `run.py`
 - **Changes**:
   - Add example usage with `--rgb_only` flag
   - Ensure backward compatibility (default behavior unchanged)
@@ -200,7 +200,7 @@ def guess_translation(self, depth, mask, K):
    - Add `rgb_only` parameter to reader classes
    - Modify `get_depth()` to return zeros when RGB-only
 
-3. **`run_demo.py`**:
+3. **`run.py`**:
    - Add `--rgb_only` command-line argument
    - Pass flag through initialization chain
 
@@ -235,7 +235,7 @@ Alternative approaches:
    - Test xyz_map generation with zero depth
 
 2. **Integration Tests**:
-   - Run `run_demo.py` with `--rgb_only` flag
+   - Run `run.py` with `--rgb_only` flag
    - Compare outputs with depth-based mode
    - Verify pose estimation still works
 

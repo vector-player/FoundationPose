@@ -137,7 +137,7 @@ def test_cli_argument():
     try:
         import argparse
         
-        # Create parser like run_demo.py does
+        # Create parser like run.py does
         parser = argparse.ArgumentParser()
         parser.add_argument('--rgb_only', action='store_true', 
                           help='Enable RGB-only mode (no depth sensor required). Depth maps will be set to zero and network will use RGB features only.')

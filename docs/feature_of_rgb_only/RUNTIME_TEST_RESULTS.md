@@ -15,7 +15,7 @@
 
 ### Initial Test (Basic Functionality)
 ```bash
-python run_demo.py --rgb_only \
+python run.py --rgb_only \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 0 \
@@ -25,7 +25,7 @@ python run_demo.py --rgb_only \
 
 ### Visualization Test (with --debug 2)
 ```bash
-xvfb-run -a python run_demo.py --rgb_only \
+xvfb-run -a python run.py --rgb_only \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 2 \
@@ -211,7 +211,7 @@ To run a complete runtime test with visualization outputs for verification:
 conda activate foundationpose
 
 # Run RGB-only mode with visualization (debug level 2)
-xvfb-run -a python run_demo.py --rgb_only \
+xvfb-run -a python run.py --rgb_only \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 2 \

@@ -165,7 +165,7 @@ When reviewing visualizations, verify:
 
 ```bash
 # Generate full visualization set
-python run_demo.py --rgb_only \
+python run.py --rgb_only \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 2 \

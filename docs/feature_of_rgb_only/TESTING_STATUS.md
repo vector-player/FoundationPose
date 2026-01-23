@@ -6,14 +6,14 @@
 
 The following tests have been completed and passed:
 
-1. **Syntax Validation**: All modified files (`estimater.py`, `datareader.py`, `run_demo.py`) compile without syntax errors
+1. **Syntax Validation**: All modified files (`estimater.py`, `datareader.py`, `run.py`) compile without syntax errors
 2. **Parameter Verification**: 
    - `rgb_only_mode` parameter exists in `FoundationPose.__init__` with default `False`
    - `rgb_only` parameter exists in data reader classes (`YcbineoatReader`, `BopBaseReader`)
 3. **Logic Verification**:
    - RGB-only mode check exists in `guess_translation()`
    - Depth filtering skip logic present in `register()` and `track_one()`
-   - CLI argument `--rgb_only` properly added to `run_demo.py`
+   - CLI argument `--rgb_only` properly added to `run.py`
 4. **Code Integration**: All RGB-only mode code paths are properly integrated
 
 **Test Script**: `test_rgb_only_mode.py` - Run with: `python3 test_rgb_only_mode.py`
@@ -34,7 +34,7 @@ The following tests require a fully configured environment with all dependencies
 
 1. **Basic Functionality Test**
    ```bash
-   python run_demo.py --rgb_only --mesh_file <mesh.obj> --test_scene_dir <scene_dir> --debug 2
+   python run.py --rgb_only --mesh_file <mesh.obj> --test_scene_dir <scene_dir> --debug 2
    ```
    - Verify no crashes
    - Verify zero-depth maps are generated
@@ -75,7 +75,7 @@ The following tests require a fully configured environment with all dependencies
 conda activate foundationpose
 
 # Run with RGB-only mode
-python run_demo.py --rgb_only \
+python run.py --rgb_only \
   --mesh_file demo_data/mustard0/mesh/textured_simple.obj \
   --test_scene_dir demo_data/mustard0 \
   --debug 2 \
