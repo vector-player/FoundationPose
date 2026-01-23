@@ -113,7 +113,52 @@ class YcbineoatReader:
     return color
 
   def get_mask(self,i):
-    mask = cv2.imread(self.color_files[i].replace('rgb','masks'),-1)
+    """
+    Get mask file by replacing only the 'rgb' subdirectory with 'masks' in the path.
+    This safely handles cases where 'rgb' appears in parent directory names (e.g., 'mustard0_rgb').
+    """
+    color_file = self.color_files[i]
+    color_dir = os.path.dirname(color_file)
+    color_filename = os.path.basename(color_file)
+    
+    # Split path into components and replace only the 'rgb' directory component
+    # This ensures we don't accidentally replace 'rgb' in parent directory names
+    path_parts = color_dir.split(os.sep)
+    
+    # Find and replace the 'rgb' directory component (search from end to find last occurrence)
+    mask_dir_parts = path_parts.copy()
+    rgb_found = False
+    for idx in range(len(mask_dir_parts) - 1, -1, -1):
+      if mask_dir_parts[idx] == 'rgb':
+        mask_dir_parts[idx] = 'masks'
+        rgb_found = True
+        break
+    
+    if not rgb_found:
+      # Fallback: if 'rgb' not found as a directory component, try string replacement
+      # but only replace '/rgb/' or '/rgb' at end to avoid replacing in parent dirs
+      if color_dir.endswith(os.sep + 'rgb'):
+        mask_dir = color_dir[:-4] + 'masks'
+      elif os.sep + 'rgb' + os.sep in color_dir:
+        mask_dir = color_dir.replace(os.sep + 'rgb' + os.sep, os.sep + 'masks' + os.sep)
+      else:
+        mask_dir = color_dir.replace('rgb', 'masks')  # Last resort
+      mask_path = os.path.join(mask_dir, color_filename)
+    else:
+      mask_dir = os.sep.join(mask_dir_parts)
+      mask_path = os.path.join(mask_dir, color_filename)
+    
+    mask = cv2.imread(mask_path, -1)
+    
+    # Check if mask file was successfully loaded
+    if mask is None:
+      raise FileNotFoundError(
+        f"Mask file not found: {mask_path}\n"
+        f"  Color file: {color_file}\n"
+        f"  Expected mask at: {mask_path}\n"
+        f"  Please ensure the masks directory exists and contains the corresponding mask file."
+      )
+    
     if len(mask.shape)==3:
       for c in range(3):
         if mask[...,c].sum()>0:

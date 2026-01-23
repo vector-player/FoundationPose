@@ -35,6 +35,192 @@
 - **debug >= 2**: Saves visualization images to `debug_dir/track_vis/`
 - **debug >= 3**: Additionally saves transformed mesh (`model_tf.obj`) and scene point cloud (`scene_complete.ply`)
 
+## Naming Conventions and Directory Structure
+
+### Overview
+
+FoundationPose uses specific naming conventions for input directories and files. Following these conventions ensures proper automatic path resolution and prevents errors. The script automatically locates mask files by replacing the `rgb` subdirectory with `masks` in the path.
+
+### Input Directory Structure
+
+Your input directory should follow this structure:
+
+```
+input_directory/
+├── rgb/              # RGB images (required)
+│   ├── 000000.png
+│   ├── 000001.png
+│   └── ...
+├── masks/            # Object masks (required)
+│   ├── 000000.png
+│   ├── 000001.png
+│   └── ...
+├── depth/            # Depth images (optional, for RGB-D mode)
+│   ├── 000000.png
+│   └── ...
+├── mesh/             # 3D mesh files (optional, for auto-detection)
+│   ├── textured_simple.obj
+│   └── ...
+└── cam_K.txt         # Camera intrinsics matrix (required)
+```
+
+### Critical Naming Rules
+
+#### 1. **Subdirectory Names Must Be Exact**
+
+- ✅ **Correct**: Use `rgb` and `masks` as exact subdirectory names
+- ❌ **Incorrect**: `RGB`, `Rgb`, `rgb_images`, `rgb_data`
+
+**Why**: The script searches for mask files by replacing the `rgb` directory component with `masks`. The replacement is case-sensitive and must match exactly.
+
+#### 2. **Parent Directory Names Can Contain 'rgb'**
+
+- ✅ **Safe**: `mustard0_rgb/inputs/rgb/` → mask path: `mustard0_rgb/inputs/masks/`
+- ✅ **Safe**: `my_rgb_dataset/scene001/rgb/` → mask path: `my_rgb_dataset/scene001/masks/`
+- ✅ **Safe**: `rgb_camera_data/inputs/rgb/` → mask path: `rgb_camera_data/inputs/masks/`
+
+**Why**: The path replacement algorithm uses component-based matching, so it only replaces the `rgb` directory component, not all occurrences of 'rgb' in the path. This allows parent directories to contain 'rgb' in their names without issues.
+
+#### 3. **File Names Must Match Between rgb/ and masks/**
+
+- ✅ **Correct**: 
+  - `rgb/1581120424100262102.png` → `masks/1581120424100262102.png`
+  - `rgb/frame_001.png` → `masks/frame_001.png`
+- ❌ **Incorrect**: 
+  - `rgb/frame_001.png` → `masks/mask_001.png` (different filename)
+  - `rgb/image.png` → `masks/image_mask.png` (different filename)
+
+**Why**: The script uses the same filename from the RGB image to locate the corresponding mask file.
+
+### Path Replacement Design
+
+The script uses a **component-based path replacement** algorithm to safely handle directory names containing 'rgb':
+
+1. **Path Splitting**: The RGB image path is split into directory components
+2. **Component Matching**: The algorithm searches for a directory component named exactly `rgb`
+3. **Selective Replacement**: Only the matching directory component is replaced with `masks`
+4. **Path Reconstruction**: The path is reconstructed with the replaced component
+
+**Example**:
+```
+Input RGB path:  ./user/mustard0_rgb/inputs/rgb/1581120424100262102.png
+Path components: ['.', 'user', 'mustard0_rgb', 'inputs', 'rgb', '1581120424100262102.png']
+Find 'rgb' component: index 4
+Replace component:  ['.', 'user', 'mustard0_rgb', 'inputs', 'masks', '1581120424100262102.png']
+Output mask path:   ./user/mustard0_rgb/inputs/masks/1581120424100262102.png
+```
+
+Notice that `mustard0_rgb` remains unchanged - only the `rgb` subdirectory is replaced.
+
+### Best Practices
+
+#### ✅ Recommended Directory Naming
+
+```bash
+# Good: Descriptive names that may contain 'rgb'
+my_dataset_rgb/
+scene001_rgb/
+rgb_camera_data/
+mustard0_rgb/
+
+# All of these work correctly because the 'rgb' subdirectory is separate
+```
+
+#### ❌ Avoid These Patterns
+
+```bash
+# Avoid: Using 'rgb' as part of the subdirectory name
+rgb_images/          # Should be just 'rgb/'
+rgb_data/            # Should be just 'rgb/'
+mask_images/         # Should be just 'masks/'
+```
+
+### Common Mistakes and Solutions
+
+#### Mistake 1: Case Sensitivity
+
+**Problem**: Using `RGB` instead of `rgb`
+```
+Error: Mask file not found: ./inputs/RGB/... → ./inputs/masks/...
+```
+
+**Solution**: Use lowercase `rgb` and `masks` for subdirectory names.
+
+#### Mistake 2: Missing Masks Directory
+
+**Problem**: Only `rgb/` directory exists, no `masks/` directory
+```
+Error: Mask file not found: ./inputs/masks/1581120424100262102.png
+```
+
+**Solution**: Create a `masks/` directory with corresponding mask files.
+
+#### Mistake 3: Filename Mismatch
+
+**Problem**: RGB and mask files have different names
+```
+RGB: rgb/frame_001.png
+Mask: masks/mask_001.png  # Different name!
+```
+
+**Solution**: Ensure mask files have the same filename as their corresponding RGB images.
+
+#### Mistake 4: Incorrect Directory Structure
+
+**Problem**: Files are not in the expected subdirectories
+```
+inputs/
+├── image1.png      # Should be in rgb/
+└── mask1.png       # Should be in masks/
+```
+
+**Solution**: Organize files into `rgb/` and `masks/` subdirectories.
+
+### Verification Checklist
+
+Before running the script, verify:
+
+- [ ] Input directory contains `rgb/` subdirectory with RGB images
+- [ ] Input directory contains `masks/` subdirectory with mask images
+- [ ] Mask filenames match RGB filenames exactly
+- [ ] `cam_K.txt` file exists in the input directory root
+- [ ] If using RGB-D mode, `depth/` subdirectory exists with depth images
+- [ ] If auto-detecting mesh, `mesh/` subdirectory exists with `.obj` files
+
+### Example: Correct Directory Setup
+
+```bash
+# Create directory structure
+mkdir -p my_scene/rgb my_scene/masks my_scene/depth my_scene/mesh
+
+# Copy RGB images
+cp images/*.png my_scene/rgb/
+
+# Copy corresponding masks (same filenames!)
+cp masks/*.png my_scene/masks/
+
+# Copy camera intrinsics
+cp cam_K.txt my_scene/
+
+# Run the script
+python run.py --inputs my_scene
+```
+
+### Technical Details
+
+The path replacement uses Python's `os.path` functions for cross-platform compatibility:
+
+- **Windows**: Uses backslashes (`\`) as path separators
+- **Linux/macOS**: Uses forward slashes (`/`) as path separators
+- **Component Matching**: Searches from the end of the path to find the last occurrence of `rgb` as a directory component
+- **Error Handling**: Raises `FileNotFoundError` with detailed information if mask file cannot be found
+
+This design ensures that:
+1. Parent directories can safely contain 'rgb' in their names
+2. Only the intended `rgb` subdirectory is replaced
+3. Paths work correctly across different operating systems
+4. Clear error messages help diagnose issues
+
 ## Basic Usage
 
 ### Standard Execution (RGB-D Mode with display)
@@ -554,6 +740,7 @@ Xvfb :99 -screen 0 1024x768x24 &
   - If `--debug_dir` is provided (and `--outputs` is not), uses `--debug_dir`
   - Otherwise defaults to `debug`
 - **Output directory cleanup**: The output directory is automatically cleared before each run using Python's `shutil.rmtree()` for safe, cross-platform operation. This ensures clean results and prevents mixing old and new outputs. The directory structure is then recreated with `track_vis/` and `ob_in_cam/` subdirectories.
+- **Naming conventions**: See the [Naming Conventions and Directory Structure](#naming-conventions-and-directory-structure) section for important guidelines on directory and file naming. The script uses component-based path replacement to locate mask files, allowing parent directories to contain 'rgb' in their names safely.
 - **Mesh file auto-detection**: If `--mesh_file` is not provided, the script automatically searches for mesh files in common locations relative to the input directory:
   - `{input_dir}/mesh/textured_simple.obj` (most common pattern)
   - `{input_dir}/mesh/*.obj` (if exactly one .obj file exists)
