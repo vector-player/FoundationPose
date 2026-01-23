@@ -10,6 +10,7 @@
 from estimater import *
 from datareader import *
 import argparse
+from datetime import datetime
 
 
 def find_mesh_file(test_scene_dir, mesh_file=None):
@@ -134,38 +135,55 @@ if __name__=='__main__':
   parser = argparse.ArgumentParser()
   code_dir = os.path.dirname(os.path.realpath(__file__))
   parser.add_argument('--mesh_file', type=str, default=None, help='Path to the 3D mesh file (.obj format). If not provided, will auto-detect from --test_scene_dir or --inputs.')
-  parser.add_argument('--test_scene_dir', type=str, default=None, help='Directory containing test scene RGB-D images. Alias for --inputs.')
-  parser.add_argument('--inputs', type=str, default=None, help='Directory containing test scene RGB-D images. Same as --test_scene_dir. If both are provided, --inputs takes precedence.')
+  parser.add_argument('--test_scene_dir', type=str, default=None, help='Directory containing test scene RGB-D images. Ignored if --inputs is provided.')
+  parser.add_argument('--inputs', type=str, default=None, help='Directory containing test scene RGB-D images. Takes precedence over --test_scene_dir if both are provided.')
+  parser.add_argument('--outputs', type=str, default=None, help='Output directory for results. Takes precedence over --debug_dir if both are provided. If --inputs is provided but --outputs is not, auto-generates outputs/<timestamp>/ as sibling of inputs.')
   parser.add_argument('--est_refine_iter', type=int, default=5)
   parser.add_argument('--track_refine_iter', type=int, default=2)
   parser.add_argument('--debug', type=int, default=1)
-  parser.add_argument('--debug_dir', type=str, default=f'{code_dir}/debug')
+  parser.add_argument('--debug_dir', type=str, default=None, help='Output directory for debug files. Used only if --outputs is not provided.')
   parser.add_argument('--rgb_only', action='store_true', help='Enable RGB-only mode (no depth sensor required). Depth maps will be set to zero and network will use RGB features only.')
   args = parser.parse_args()
 
   set_logging_format()
   set_seed(0)
 
-  # Determine which input directory to use: --inputs takes precedence over --test_scene_dir
-  # If neither is provided, use default
+  # Determine which input directory to use
+  # Priority: --inputs > --test_scene_dir > default
   if args.inputs:
     test_scene_dir = args.inputs
+    if args.test_scene_dir:
+      logging.warning(f"Both --inputs and --test_scene_dir provided. Using --inputs: {args.inputs} (ignoring --test_scene_dir)")
   elif args.test_scene_dir:
     test_scene_dir = args.test_scene_dir
   else:
     test_scene_dir = f'{code_dir}/demo_data/mustard0'
     logging.info(f"No input directory specified, using default: {test_scene_dir}")
 
-  # Warn if both are provided
-  if args.inputs and args.test_scene_dir:
-    logging.warning(f"Both --inputs and --test_scene_dir provided. Using --inputs: {args.inputs}")
+  # Determine which output directory to use
+  # Priority: --outputs > auto-generated (if inputs given) > --debug_dir > default
+  if args.outputs:
+    debug_dir = args.outputs
+    if args.debug_dir:
+      logging.warning(f"Both --outputs and --debug_dir provided. Using --outputs: {args.outputs} (ignoring --debug_dir)")
+  elif args.inputs:
+    # Auto-generate outputs/<timestamp>/ as sibling of inputs
+    inputs_abs = os.path.abspath(args.inputs)
+    inputs_parent = os.path.dirname(inputs_abs)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    debug_dir = os.path.join(inputs_parent, 'outputs', timestamp)
+    logging.info(f"Auto-generating output directory as sibling of inputs: {debug_dir}")
+  elif args.debug_dir:
+    debug_dir = args.debug_dir
+  else:
+    debug_dir = f'{code_dir}/debug'
+    logging.info(f"No output directory specified, using default: {debug_dir}")
 
   # Auto-detect mesh file if not explicitly provided
   mesh_file = find_mesh_file(test_scene_dir, args.mesh_file)
   mesh = trimesh.load(mesh_file)
 
   debug = args.debug
-  debug_dir = args.debug_dir
   os.system(f'rm -rf {debug_dir}/* && mkdir -p {debug_dir}/track_vis {debug_dir}/ob_in_cam')
 
   to_origin, extents = trimesh.bounds.oriented_bounds(mesh)

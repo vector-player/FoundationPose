@@ -19,12 +19,13 @@
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
 | `--mesh_file` | str | `None` (auto-detected) | Path to the 3D mesh file (.obj format). If not provided, will auto-detect from `--test_scene_dir` or `--inputs` by searching common locations: `{input_dir}/mesh/textured_simple.obj`, `{input_dir}/mesh/*.obj`, or `{input_dir}/../mesh/*.obj` |
-| `--test_scene_dir` | str | `demo_data/mustard0` | Directory containing test scene RGB-D images. Alias for `--inputs`. If both are provided, `--inputs` takes precedence. |
-| `--inputs` | str | `demo_data/mustard0` | Directory containing test scene RGB-D images. Same as `--test_scene_dir`. If both are provided, `--inputs` takes precedence. |
+| `--test_scene_dir` | str | `demo_data/mustard0` | Directory containing test scene RGB-D images. Ignored if `--inputs` is provided. |
+| `--inputs` | str | `None` | Directory containing test scene RGB-D images. Takes precedence over `--test_scene_dir` if both are provided. |
+| `--outputs` | str | `None` | Output directory for results. Takes precedence over `--debug_dir` if both are provided. If `--inputs` is provided but `--outputs` is not, auto-generates `outputs/<timestamp>/` as sibling of inputs directory. |
 | `--est_refine_iter` | int | 5 | Number of refinement iterations for initial pose estimation |
 | `--track_refine_iter` | int | 2 | Number of refinement iterations for pose tracking |
 | `--debug` | int | 1 | Debug level (0-3): controls visualization and output verbosity |
-| `--debug_dir` | str | `debug` | Output directory for debug files and visualizations |
+| `--debug_dir` | str | `debug` | Output directory for debug files. Used only if `--outputs` is not provided. |
 | `--rgb_only` | flag | False | Enable RGB-only mode (no depth sensor required). Depth maps will be set to zero and network will use RGB features only |
 
 ### Debug Levels
@@ -273,9 +274,75 @@ services:
     command: xvfb-run -a python run.py --debug 2
 ```
 
+## Input and Output Directory Selection
+
+### Input Directory Logic
+
+The script determines the input directory using the following priority:
+
+1. **If `--inputs` is provided**: Use `--inputs` (ignores `--test_scene_dir` if also provided)
+2. **Else if `--test_scene_dir` is provided**: Use `--test_scene_dir`
+3. **Else**: Use default `demo_data/mustard0`
+
+**Examples:**
+```bash
+# Uses --inputs (ignores --test_scene_dir)
+python run.py --inputs /path/to/inputs --test_scene_dir /other/path
+
+# Uses --test_scene_dir
+python run.py --test_scene_dir /path/to/scene
+
+# Uses default demo_data/mustard0
+python run.py
+```
+
+### Output Directory Logic
+
+The script determines the output directory using the following priority:
+
+1. **If `--outputs` is provided**: Use `--outputs` (ignores `--debug_dir` if also provided)
+2. **Else if `--inputs` is provided**: Auto-generate `outputs/<timestamp>/` as sibling of `inputs` directory
+   - Example: If `--inputs /data/scene001`, generates `/data/outputs/20240123_143022/`
+3. **Else if `--debug_dir` is provided**: Use `--debug_dir`
+4. **Else**: Use default `debug`
+
+**Examples:**
+```bash
+# Uses --outputs (ignores --debug_dir)
+python run.py --inputs /data/scene --outputs /results/output1 --debug_dir /other/debug
+
+# Auto-generates outputs/<timestamp>/ as sibling of inputs
+python run.py --inputs /data/scene001
+# Creates: /data/outputs/20240123_143022/
+
+# Uses --debug_dir
+python run.py --test_scene_dir /data/scene --debug_dir /custom/debug
+
+# Uses default debug
+python run.py --test_scene_dir /data/scene
+```
+
+### Directory Structure Example
+
+When using `--inputs` with auto-generated outputs:
+
+```
+/data/
+├── scene001/          (--inputs)
+│   ├── rgb/
+│   ├── depth/
+│   ├── mesh/
+│   └── cam_K.txt
+└── outputs/           (auto-generated sibling)
+    └── 20240123_143022/  (timestamped output)
+        ├── ob_in_cam/
+        ├── track_vis/
+        └── ...
+```
+
 ## Output Files
 
-The script generates the following outputs in `debug_dir`:
+The script generates the following outputs in the output directory (determined by the logic above):
 
 - **`ob_in_cam/`**: Pose matrices (4x4 transformation matrices) for each frame
 - **`track_vis/`**: Visualization images (when `debug >= 2`)
@@ -291,10 +358,23 @@ The script generates the following outputs in `debug_dir`:
 conda activate foundationpose
 
 # 2. Run with virtual display (headless, mesh auto-detected)
+# Using --inputs with auto-generated outputs
+xvfb-run -a python run.py \
+  --inputs demo_data/mustard0 \
+  --debug 2
+# Outputs will be in: demo_data/outputs/<timestamp>/
+
+# Or specify custom output directory
+xvfb-run -a python run.py \
+  --inputs demo_data/mustard0 \
+  --outputs ./results \
+  --debug 2
+
+# Or use --test_scene_dir with --debug_dir (legacy)
 xvfb-run -a python run.py \
   --test_scene_dir demo_data/mustard0 \
-  --debug 2 \
-  --debug_dir ./results
+  --debug_dir ./results \
+  --debug 2
 
 # 3. Check results
 ls ./results/track_vis/     # Visualization images
@@ -309,13 +389,23 @@ ls ./results/depth.png      # Depth image (RGB-D mode only)
 conda activate foundationpose
 
 # 2. Run RGB-only mode with virtual display (headless, mesh auto-detected)
+# Using --inputs with auto-generated outputs
 xvfb-run -a python run.py \
   --rgb_only \
-  --test_scene_dir demo_data/mustard0 \
+  --inputs demo_data/mustard0 \
   --debug 2 \
   --est_refine_iter 5 \
-  --track_refine_iter 2 \
-  --debug_dir ./results_rgb_only
+  --track_refine_iter 2
+# Outputs will be in: demo_data/outputs/<timestamp>/
+
+# Or specify custom output directory
+xvfb-run -a python run.py \
+  --rgb_only \
+  --inputs demo_data/mustard0 \
+  --outputs ./results_rgb_only \
+  --debug 2 \
+  --est_refine_iter 5 \
+  --track_refine_iter 2
 
 # 3. Check results
 ls ./results_rgb_only/track_vis/     # Visualization images
@@ -327,28 +417,31 @@ ls ./results_rgb_only/ob_in_cam/     # Pose files
 
 ```bash
 # Quick test without visualization (fastest, mesh auto-detected)
+# Using --inputs with auto-generated outputs
 python run.py \
   --rgb_only \
-  --test_scene_dir demo_data/mustard0 \
+  --inputs demo_data/mustard0 \
   --debug 0 \
   --est_refine_iter 2 \
   --track_refine_iter 1
+# Outputs will be in: demo_data/outputs/<timestamp>/
 
 # Check pose files only
-ls debug/ob_in_cam/
+ls demo_data/outputs/*/ob_in_cam/
 ```
 
 ### Workflow 4: RGB-Only Mode with Full Visualization
 
 ```bash
 # Generate complete visualization set (mesh auto-detected)
+# Using --inputs with custom outputs
 xvfb-run -a python run.py \
   --rgb_only \
-  --test_scene_dir demo_data/mustard0 \
+  --inputs demo_data/mustard0 \
+  --outputs ./rgb_only_vis \
   --debug 2 \
   --est_refine_iter 5 \
-  --track_refine_iter 2 \
-  --debug_dir ./rgb_only_vis
+  --track_refine_iter 2
 
 # Create GIF animation from visualizations
 cd rgb_only_vis/track_vis
@@ -438,10 +531,18 @@ Xvfb :99 -screen 0 1024x768x24 &
 - First frame uses registration (`est.register()`), subsequent frames use tracking (`est.track_one()`)
 - Pose outputs are saved as 4x4 transformation matrices in `ob_in_cam/` directory
 - Visualization shows 3D bounding box and coordinate axes overlaid on the RGB image
-- **Mesh file auto-detection**: If `--mesh_file` is not provided, the script automatically searches for mesh files in common locations relative to `--inputs` or `--test_scene_dir`:
-  - `{test_scene_dir}/mesh/textured_simple.obj` (most common pattern)
-  - `{test_scene_dir}/mesh/*.obj` (if exactly one .obj file exists)
-  - `{test_scene_dir}/../mesh/*.obj` (parent directory)
+- **Input directory selection**: 
+  - `--inputs` takes precedence over `--test_scene_dir` if both are provided
+  - If neither is provided, defaults to `demo_data/mustard0`
+- **Output directory selection**:
+  - `--outputs` takes precedence over `--debug_dir` if both are provided
+  - If `--inputs` is provided but `--outputs` is not, auto-generates `outputs/<timestamp>/` as sibling of inputs
+  - If `--debug_dir` is provided (and `--outputs` is not), uses `--debug_dir`
+  - Otherwise defaults to `debug`
+- **Mesh file auto-detection**: If `--mesh_file` is not provided, the script automatically searches for mesh files in common locations relative to the input directory:
+  - `{input_dir}/mesh/textured_simple.obj` (most common pattern)
+  - `{input_dir}/mesh/*.obj` (if exactly one .obj file exists)
+  - `{input_dir}/../mesh/*.obj` (parent directory)
   - Falls back to default `demo_data/mustard0/mesh/textured_simple.obj` if none found
 - **RGB-only mode**: When `--rgb_only` is enabled, depth maps are set to zero and the network falls back to RGB features only
 - **RGB-only mode**: Translation estimation uses mesh diameter heuristic (~2.5x mesh diameter)
