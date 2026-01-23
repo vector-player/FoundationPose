@@ -289,7 +289,16 @@ class FoundationPose:
     return -torch.ones(len(poses), device='cuda', dtype=torch.float)
 
 
-  def track_one(self, rgb, depth, K, iteration, extra={}):
+  def track_one(self, rgb, depth, K, iteration, ob_mask=None, extra={}):
+    """
+    Track object pose from previous frame.
+    @rgb: RGB image (H,W,3)
+    @depth: Depth map (H,W)
+    @K: Camera intrinsics (3,3)
+    @iteration: Number of refinement iterations
+    @ob_mask: Optional mask array (H,W) - if provided, used for filtering valid points
+    @extra: Extra dictionary for debug outputs
+    """
     if self.pose_last is None:
       logging.info("Please init pose by register first")
       raise RuntimeError
@@ -313,6 +322,44 @@ class FoundationPose:
         logging.warning(f"RGB-only mode: xyz_map should be zero but max value is {np.abs(xyz_map).max()}")
       else:
         logging.info("RGB-only mode: xyz_map is zero, network will use RGB features only")
+
+    # Use mask for filtering if provided
+    if ob_mask is not None:
+      ob_mask = np.asarray(ob_mask, dtype=bool)
+      if ob_mask.shape[:2] != depth.shape[:2]:
+        logging.warning(f"Mask shape {ob_mask.shape[:2]} doesn't match depth shape {depth.shape[:2]}, resizing mask")
+        ob_mask = cv2.resize(ob_mask.astype(np.uint8), (depth.shape[1], depth.shape[0]), interpolation=cv2.INTER_NEAREST).astype(bool)
+      
+      # Filter xyz_map using mask (similar to registration)
+      if self.rgb_only_mode:
+        valid = (ob_mask > 0)
+      else:
+        valid = (xyz_map[...,2]>=0.001) & (ob_mask>0)
+      
+      if valid.sum() < 4:
+        logging.warning(f"Very few valid points after mask filtering ({valid.sum()}), mask may be too restrictive")
+      else:
+        logging.info(f"Using mask: {valid.sum()} valid points out of {valid.size}")
+        
+        # Optionally use mask center for translation refinement if pose drift detected
+        # Check if current pose translation is far from mask center
+        current_center = self.pose_last[:3, 3].cpu().numpy()
+        mask_center = self.guess_translation(depth=depth.cpu().numpy(), mask=ob_mask, K=K)
+        center_diff = np.linalg.norm(current_center - mask_center)
+        
+        # If translation differs significantly, use mask center as hint
+        # Threshold: 10% of object diameter
+        if center_diff > self.diameter * 0.1:
+          logging.info(f"Detected potential drift: center diff = {center_diff:.4f}, using mask center for refinement")
+          # Adjust pose translation towards mask center (weighted combination)
+          alpha = 0.3  # Weight for mask center
+          adjusted_center = (1 - alpha) * current_center + alpha * mask_center
+          self.pose_last[:3, 3] = torch.as_tensor(adjusted_center, device='cuda', dtype=torch.float)
+      
+      if self.debug>=2:
+        import time
+        timestamp = int(time.time() * 1000000)  # Microsecond timestamp
+        cv2.imwrite(f'{self.debug_dir}/track_mask_{timestamp}.png', (ob_mask*255.0).clip(0,255).astype(np.uint8))
 
     pose, vis = self.refiner.predict(mesh=self.mesh, mesh_tensors=self.mesh_tensors, rgb=rgb, depth=depth, K=K, ob_in_cams=self.pose_last.reshape(1,4,4).data.cpu().numpy(), normal_map=None, xyz_map=xyz_map, mesh_diameter=self.diameter, glctx=self.glctx, iteration=iteration, get_vis=self.debug>=2)
     logging.info("pose done")
