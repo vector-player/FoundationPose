@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `blender_script_generator.py` is a Python utility that converts FoundationPose tracking data into standalone Blender animation scripts. It extracts pose matrices from FoundationPose output directories and generates a complete, self-contained Blender Python script that can be run directly in Blender to visualize the tracked object's motion in 3D.
+The `utils/blender_script_generator.py` is a Python utility that converts FoundationPose tracking data into standalone Blender animation scripts. It extracts pose matrices from FoundationPose output directories and generates a complete, self-contained Blender Python script that can be run directly in Blender to visualize the tracked object's motion in 3D.
 
 ## Purpose
 
@@ -55,13 +55,13 @@ This tool bridges the gap between FoundationPose tracking results and 3D visuali
 ### Basic Usage
 
 ```bash
-python blender_script_generator.py --input <path_to_ob_in_cam_directory>
+python utils/blender_script_generator.py --input <path_to_ob_in_cam_directory>
 ```
 
 ### Full Command with Options
 
 ```bash
-python blender_script_generator.py \
+python utils/blender_script_generator.py \
     --input <path_to_ob_in_cam_directory> \
     --object_name <object_name> \
     --camera_intrinsics <path_to_cam_K.txt> \
@@ -79,17 +79,17 @@ python blender_script_generator.py \
 
 ```bash
 # Basic usage with auto-detection
-python blender_script_generator.py --input user/earbuds_003/output/ob_in_cam
+python utils/blender_script_generator.py --input user/earbuds_003/output/ob_in_cam
 
 # With explicit object name and camera intrinsics
-python blender_script_generator.py \
+python utils/blender_script_generator.py \
     --input user/bottle_001/output/ob_in_cam \
     --object_name bottle \
     --camera_intrinsics user/bottle_001/input/cam_K.txt \
     --output bottle_animation.py
 
 # Using FoundationPose demo data structure
-python blender_script_generator.py \
+python utils/blender_script_generator.py \
     --input demo_data/mustard0/ob_in_cam \
     --camera_intrinsics demo_data/mustard0/cam_K.txt
 ```
@@ -276,7 +276,7 @@ FoundationPose Tracking
     ↓
 [ob_in_cam/ directory with pose matrices]
     ↓
-blender_script_generator.py
+utils/blender_script_generator.py
     ↓
 [Standalone Blender script]
     ↓
@@ -306,4 +306,4 @@ Modify these constants in the generated script to customize the visualization.
 
 ## Summary
 
-The `blender_script_generator.py` is an essential tool for visualizing FoundationPose tracking results. It automates the conversion of pose data into professional 3D animations, making it easy to verify tracking quality, debug issues, and create visualizations for presentations or documentation. The generated scripts are standalone and portable, requiring only Blender to run.
+The `utils/blender_script_generator.py` is an essential tool for visualizing FoundationPose tracking results. It automates the conversion of pose data into professional 3D animations, making it easy to verify tracking quality, debug issues, and create visualizations for presentations or documentation. The generated scripts are standalone and portable, requiring only Blender to run.
