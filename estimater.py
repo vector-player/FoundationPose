@@ -343,7 +343,13 @@ class FoundationPose:
         
         # Optionally use mask center for translation refinement if pose drift detected
         # Check if current pose translation is far from mask center
-        current_center = self.pose_last[:3, 3].cpu().numpy()
+        # Handle both (4,4) and (1,4,4) shapes for pose_last
+        if len(self.pose_last.shape) == 3:
+          # Batch dimension present: shape is (1, 4, 4)
+          current_center = self.pose_last[0, :3, 3].cpu().numpy()
+        else:
+          # No batch dimension: shape is (4, 4)
+          current_center = self.pose_last[:3, 3].cpu().numpy()
         mask_center = self.guess_translation(depth=depth.cpu().numpy(), mask=ob_mask, K=K)
         center_diff = np.linalg.norm(current_center - mask_center)
         
@@ -354,7 +360,11 @@ class FoundationPose:
           # Adjust pose translation towards mask center (weighted combination)
           alpha = 0.3  # Weight for mask center
           adjusted_center = (1 - alpha) * current_center + alpha * mask_center
-          self.pose_last[:3, 3] = torch.as_tensor(adjusted_center, device='cuda', dtype=torch.float)
+          # Handle both (4,4) and (1,4,4) shapes when assigning back
+          if len(self.pose_last.shape) == 3:
+            self.pose_last[0, :3, 3] = torch.as_tensor(adjusted_center, device='cuda', dtype=torch.float)
+          else:
+            self.pose_last[:3, 3] = torch.as_tensor(adjusted_center, device='cuda', dtype=torch.float)
       
       if self.debug>=2:
         import time
@@ -365,7 +375,8 @@ class FoundationPose:
     logging.info("pose done")
     if self.debug>=2:
       extra['vis'] = vis
-    self.pose_last = pose
+    # Clone to convert inference tensor to normal tensor, allowing in-place modifications
+    self.pose_last = pose.clone()
     return (pose@self.get_tf_to_centered_mesh()).data.cpu().numpy().reshape(4,4)
 
 

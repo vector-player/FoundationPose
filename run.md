@@ -4,6 +4,10 @@
 
 `run.py` is a demonstration script for FoundationPose, a 6D object pose estimation and tracking system. The script processes a sequence of RGB-D images (or RGB-only images) to register and track the pose of a 3D object model.
 
+```shell
+xvfb-run -a python run.py --rgb_only --debug 2 --inputs path/to/inputs
+```
+
 ## Use Cases
 
 1. **Object Pose Registration**: Initial pose estimation from the first frame using RGB-D data
@@ -724,6 +728,133 @@ Xvfb :99 -screen 0 1024x768x24 &
 
 ### Issue: RGB-only mode crashes during visualization
 **Solution**: Ensure you have the latest code with RGB-only mode visualization fixes (Issue #2 resolved)
+
+### Issue: Shape Mismatch Error When Using Multiple Masks
+**Error Message**:
+```
+ValueError: operands could not be broadcast together with shapes (1,4) (3,)
+```
+
+**Location**: `estimater.py`, line 348 in `track_one()` method
+
+**When It Occurs**:
+- ✅ Frame 0 (registration): Works fine
+- ✅ Frame 1 (first tracking frame): Works fine
+- ❌ Frame 2+ (subsequent tracking frames): Fails with shape mismatch error
+
+**Root Cause**:
+This error occurs when using masks for multiple frames during tracking. The issue stems from an inconsistent tensor shape:
+
+1. **Frame 0 (Registration)**: `self.pose_last` has shape `(4, 4)` - a single pose matrix
+2. **Frame 1+ (Tracking)**: After the first tracking update, `self.pose_last` becomes shape `(1, 4, 4)` - a batch tensor with one pose
+3. **Shape Mismatch**: The code attempts to extract translation as `self.pose_last[:3, 3]`, which:
+   - Works correctly for `(4, 4)` shape → returns `(3,)` translation vector
+   - Fails for `(1, 4, 4)` shape → returns `(1, 4)` instead of `(3,)`
+   - Causes broadcast error when subtracting from mask center `(3,)` vector
+
+**The Fix**:
+The code has been updated to handle both tensor shapes correctly:
+
+```python
+# Handle both (4,4) and (1,4,4) shapes for pose_last
+if len(self.pose_last.shape) == 3:
+    # Batch dimension present: shape is (1, 4, 4)
+    current_center = self.pose_last[0, :3, 3].cpu().numpy()
+else:
+    # No batch dimension: shape is (4, 4)
+    current_center = self.pose_last[:3, 3].cpu().numpy()
+```
+
+**Solution Status**:
+✅ **Fixed**: This issue has been resolved in the codebase. The fix:
+- Detects the shape of `self.pose_last` automatically
+- Extracts translation correctly for both `(4, 4)` and `(1, 4, 4)` shapes
+- Maintains backward compatibility with single-frame mask usage
+- Works correctly with fallback behavior (when only first frame mask is provided)
+
+**Compatibility**:
+The fix is fully compatible with all mask usage scenarios:
+- ✅ **First frame mask only** (fallback): Fix only runs when masks are available, skipped otherwise
+- ✅ **All frames have masks**: Fix handles both shapes correctly throughout tracking
+- ✅ **No masks at all**: Fix never executes, no interference
+- ✅ **Mixed mask availability**: Fix only runs when masks are present
+
+**If You Encounter This Error**:
+1. **Update your codebase**: Ensure you have the latest version with the fix applied
+2. **Check your setup**: Verify mask files exist and are correctly named (see [Naming Conventions](#naming-conventions-and-directory-structure))
+3. **Verify fix is applied**: Check `estimater.py` lines 347-367 for the shape detection code
+
+**Technical Details**:
+- The error occurs in the mask-based drift detection code
+- This code compares the current pose translation with the mask center to detect tracking drift
+- When drift is detected (>10% of object diameter), the pose translation is adjusted towards the mask center
+- The fix ensures this drift detection works correctly regardless of tensor shape
+
+**Related Documentation**: See `docs/debug/operands_could_not_be_broadcast_together_with_shapes(1,4)(3,).md` for detailed technical analysis.
+
+### Issue: RuntimeError When Adjusting Pose with Masks
+**Error Message**:
+```
+RuntimeError: Inplace update to inference tensor outside InferenceMode is not allowed.
+You can make a clone to get a normal tensor before doing inplace update.
+```
+
+**Location**: `estimater.py`, line 365 in `track_one()` method
+
+**When It Occurs**:
+- ✅ Frame 0 (registration): Works fine
+- ✅ Frame 1 (first tracking frame): May work (depending on tensor state)
+- ❌ Frame 2+ (subsequent tracking frames): Fails when drift is detected and pose adjustment is attempted
+
+**Root Cause**:
+This error occurs after the shape mismatch fix when the code attempts to adjust the pose translation based on mask center. The issue is that `self.pose_last` is an **inference tensor** (created by the refiner model), which PyTorch protects from in-place modifications.
+
+**The Problem**:
+1. **Inference tensor from refiner**: `self.pose_last` is set from `pose` returned by `refiner.predict()`, which creates an inference tensor
+2. **Inference tensors are read-only**: PyTorch prevents in-place modifications to inference tensors outside of inference mode
+3. **In-place modification fails**: When drift is detected, the code tries to modify `self.pose_last[0, :3, 3]` in-place, which PyTorch blocks
+
+**The Fix**:
+The code has been updated to clone the inference tensor, converting it to a normal tensor that can be modified:
+
+```python
+# Line 378 - After refiner.predict()
+pose, vis = self.refiner.predict(...)
+# Clone to convert inference tensor to normal tensor, allowing in-place modifications
+self.pose_last = pose.clone()
+```
+
+**Solution Status**:
+✅ **Fixed**: This issue has been resolved in the codebase. The fix:
+- Clones the inference tensor when assigning to `self.pose_last`
+- Converts inference tensor to normal tensor, allowing safe in-place modifications
+- Works correctly with the shape mismatch fix
+- Maintains compatibility with all mask usage scenarios
+
+**Why This Happens**:
+- PyTorch models run with `torch.inference_mode()` or `torch.no_grad()` create inference tensors
+- Inference tensors are read-only to prevent accidental modifications
+- When mask-based drift detection adjusts pose translation, it needs to modify the tensor in-place
+- Cloning converts the inference tensor to a normal tensor that can be safely modified
+
+**Relationship to Shape Mismatch Error**:
+- Both errors occur in the same code section (mask-based drift detection)
+- The shape mismatch error occurs when extracting translation from `self.pose_last`
+- The RuntimeError occurs when trying to modify `self.pose_last` after drift is detected
+- Both fixes work together to enable mask-based pose adjustment
+
+**If You Encounter This Error**:
+1. **Update your codebase**: Ensure you have the latest version with both fixes applied
+2. **Check tensor cloning**: Verify line 378 in `estimater.py` uses `.clone()`
+3. **Verify mask files**: Ensure mask files exist and are correctly named
+
+**Technical Details**:
+- Inference tensors are created when models run in inference mode
+- PyTorch RFC 17 introduced inference tensor protection
+- Cloning is a lightweight operation for small tensors (4x4 or 1x4x4 pose matrices)
+- The fix ensures `self.pose_last` is always a normal tensor that can be modified
+
+**Related Documentation**: See `docs/debug/RuntimeError: Inplace update to inference tensor outside InferenceMode is not allowed.md` for detailed technical analysis, code flow diagrams, and multiple solution approaches.
 
 ## Notes
 
