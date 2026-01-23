@@ -16,6 +16,11 @@ This script runs tracking twice on the same sequence:
 It then compares the results using various metrics.
 """
 
+import sys
+import os
+code_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, code_dir)
+
 from estimater import *
 from datareader import *
 import argparse

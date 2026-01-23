@@ -1,0 +1,23 @@
+{
+  "num_frames": 737,
+  "stability_no_mask": {
+    "translation_variance": 0.010000056587159634,
+    "rotation_variance": 4717.241473019687,
+    "frame_to_frame_trans": 0.0024229942355304956,
+    "frame_to_frame_rot": 0.822800135751587
+  },
+  "stability_with_mask": {
+    "translation_variance": 0.009998087771236897,
+    "rotation_variance": 4716.7566419091845,
+    "frame_to_frame_trans": 0.002408135449513793,
+    "frame_to_frame_rot": 0.8337044697661923
+  },
+  "comparison": {
+    "stability": {
+      "translation_variance_improvement": 1.9688159227371216e-06,
+      "rotation_variance_improvement": 0.484831110502455,
+      "frame_to_frame_trans_improvement": 1.4858786016702652e-05,
+      "frame_to_frame_rot_improvement": -0.010904334014605332
+    }
+  }
+}

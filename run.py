@@ -144,6 +144,7 @@ if __name__=='__main__':
   parser.add_argument('--debug', type=int, default=1)
   parser.add_argument('--debug_dir', type=str, default=None, help='Output directory for debug files. Used only if --outputs is not provided.')
   parser.add_argument('--rgb_only', action='store_true', help='Enable RGB-only mode (no depth sensor required). Depth maps will be set to zero and network will use RGB features only.')
+  parser.add_argument('--no_masks', action='store_false', dest='use_masks', default=True, help='Disable mask usage for tracking. By default, masks are automatically used if mask files exist in the masks/ directory.')
   args = parser.parse_args()
 
   set_logging_format()
@@ -223,13 +224,17 @@ if __name__=='__main__':
         pcd = toOpen3dCloud(xyz_map[valid], color[valid])
         o3d.io.write_point_cloud(f'{debug_dir}/scene_complete.ply', pcd)
     else:
-      # Get mask for tracking frame (if available)
-      try:
-        mask = reader.get_mask(i).astype(bool)
-        pose = est.track_one(rgb=color, depth=depth, K=reader.K, ob_mask=mask, iteration=args.track_refine_iter)
-      except (FileNotFoundError, AttributeError) as e:
-        # If mask not available, track without mask (backward compatibility)
-        logging.info(f"Mask not available for frame {i}, tracking without mask: {e}")
+      # Get mask for tracking frame (if enabled and available)
+      if args.use_masks:
+        try:
+          mask = reader.get_mask(i).astype(bool)
+          pose = est.track_one(rgb=color, depth=depth, K=reader.K, ob_mask=mask, iteration=args.track_refine_iter)
+        except (FileNotFoundError, AttributeError) as e:
+          # If mask not available, track without mask (backward compatibility)
+          logging.info(f"Mask not available for frame {i}, tracking without mask: {e}")
+          pose = est.track_one(rgb=color, depth=depth, K=reader.K, iteration=args.track_refine_iter)
+      else:
+        # Masks disabled, track without masks
         pose = est.track_one(rgb=color, depth=depth, K=reader.K, iteration=args.track_refine_iter)
 
     os.makedirs(f'{debug_dir}/ob_in_cam', exist_ok=True)
