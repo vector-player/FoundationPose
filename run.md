@@ -349,6 +349,20 @@ The script generates the following outputs in the output directory (determined b
 - **`model_tf.obj`**: Transformed mesh model (when `debug >= 3`)
 - **`scene_complete.ply`**: Scene point cloud (when `debug >= 3`)
 
+### Output Directory Cleanup
+
+**Important**: The script automatically clears the output directory before each run to ensure clean results:
+
+- If the output directory exists, all its contents are removed before processing begins
+- The directory structure (`track_vis/` and `ob_in_cam/`) is then recreated
+- This prevents mixing old and new results from previous runs
+- Uses Python's `shutil.rmtree()` for safe, cross-platform directory removal that handles paths with spaces and special characters correctly
+
+**Note**: If you want to preserve previous results, either:
+- Use different output directories for each run (e.g., with timestamps)
+- Manually backup the output directory before running
+- Use the auto-generated timestamped outputs when using `--inputs`
+
 ## Example Workflows
 
 ### Workflow 1: RGB-D Mode (Standard)
@@ -539,6 +553,7 @@ Xvfb :99 -screen 0 1024x768x24 &
   - If `--inputs` is provided but `--outputs` is not, auto-generates `outputs/<timestamp>/` as sibling of inputs
   - If `--debug_dir` is provided (and `--outputs` is not), uses `--debug_dir`
   - Otherwise defaults to `debug`
+- **Output directory cleanup**: The output directory is automatically cleared before each run using Python's `shutil.rmtree()` for safe, cross-platform operation. This ensures clean results and prevents mixing old and new outputs. The directory structure is then recreated with `track_vis/` and `ob_in_cam/` subdirectories.
 - **Mesh file auto-detection**: If `--mesh_file` is not provided, the script automatically searches for mesh files in common locations relative to the input directory:
   - `{input_dir}/mesh/textured_simple.obj` (most common pattern)
   - `{input_dir}/mesh/*.obj` (if exactly one .obj file exists)

@@ -11,6 +11,7 @@ from estimater import *
 from datareader import *
 import argparse
 from datetime import datetime
+import shutil
 
 
 def find_mesh_file(test_scene_dir, mesh_file=None):
@@ -184,7 +185,15 @@ if __name__=='__main__':
   mesh = trimesh.load(mesh_file)
 
   debug = args.debug
-  os.system(f'rm -rf {debug_dir}/* && mkdir -p {debug_dir}/track_vis {debug_dir}/ob_in_cam')
+  
+  # Safely clear and recreate output directory
+  # Remove existing directory contents if it exists, then create subdirectories
+  if os.path.exists(debug_dir):
+    shutil.rmtree(debug_dir)
+    logging.info(f"Cleared existing output directory: {debug_dir}")
+  os.makedirs(f'{debug_dir}/track_vis', exist_ok=True)
+  os.makedirs(f'{debug_dir}/ob_in_cam', exist_ok=True)
+  logging.info(f"Created output directory structure: {debug_dir}")
 
   to_origin, extents = trimesh.bounds.oriented_bounds(mesh)
   bbox = np.stack([-extents/2, extents/2], axis=0).reshape(2,3)
