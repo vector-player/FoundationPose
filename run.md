@@ -225,6 +225,177 @@ This design ensures that:
 3. Paths work correctly across different operating systems
 4. Clear error messages help diagnose issues
 
+## Mesh Files and Material Requirements
+
+### Overview
+
+FoundationPose requires a 3D mesh file (`.obj` format) representing the object to be tracked. The mesh file can optionally include texture materials for enhanced visualization and rendering. This section covers mesh file requirements, material specifications, and the fallback mechanism when texture images are missing.
+
+### Mesh File Format
+
+FoundationPose supports OBJ format mesh files. The mesh file should contain:
+- **Vertices** (`v` lines): 3D coordinates of mesh vertices
+- **Faces** (`f` lines): Face definitions connecting vertices
+- **Texture coordinates** (`vt` lines): Optional UV coordinates for texture mapping
+- **Material library reference** (`mtllib` line): Reference to a Material Template Library (MTL) file
+
+### Material Template Library (MTL) Files
+
+If your mesh uses textures, you need a corresponding MTL file that defines material properties and references texture images.
+
+#### MTL File Structure
+
+An MTL file contains material definitions with the following format:
+
+```
+# Comments start with #
+newmtl material_name
+Ns 96.078431          # Specular exponent
+Ka 1.000000 1.000000 1.000000  # Ambient color (RGB)
+Kd 0.800000 0.800000 0.800000  # Diffuse color (RGB)
+Ks 0.500000 0.500000 0.500000  # Specular color (RGB)
+Ke 0.000000 0.000000 0.000000  # Emissive color (RGB)
+Ni 1.000000           # Optical density (index of refraction)
+d 1.000000            # Dissolve (transparency, 0.0-1.0)
+illum 2               # Illumination model (0-10)
+map_Kd texture.png    # Diffuse texture map (IMAGE REFERENCE)
+```
+
+#### Texture Image References
+
+To use a texture image with your mesh, you must reference it in the MTL file using one of these map commands:
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `map_Kd` | Diffuse texture map (most common) | `map_Kd shaded.png` |
+| `map_Ks` | Specular texture map | `map_Ks specular.png` |
+| `map_Ka` | Ambient texture map | `map_Ka ambient.png` |
+| `map_Bump` or `map_bump` | Normal/bump map | `map_Bump normal.png` |
+| `map_d` | Opacity/alpha map | `map_d alpha.png` |
+
+**Important Notes:**
+- Image paths in MTL files are **relative to the MTL file's directory**
+- Supported image formats: PNG, JPG, JPEG, TGA, BMP, TIFF
+- The `map_Kd` command is the most commonly used for basic texture mapping
+
+#### Example: Complete MTL File with Texture
+
+```
+# Blender 4.4.3 MTL File
+# www.blender.org
+
+newmtl model.001
+Ns 218.920959
+Ka 1.000000 1.000000 1.000000
+Kd 0.000000 0.000000 0.000000
+Ks 0.500000 0.500000 0.500000
+Ke 1.000000 1.000000 1.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd shaded.png
+```
+
+In this example, `shaded.png` should be located in the same directory as the MTL file.
+
+### Material Requirements and Fallback Mechanism
+
+FoundationPose handles mesh materials with the following priority:
+
+1. **Texture Image (Preferred)**: If the MTL file references a texture image and the image file exists, FoundationPose will use it for rendering.
+2. **Vertex Colors**: If no texture image is available but the mesh has vertex colors, those will be used.
+3. **Default Gray Color**: If neither texture nor vertex colors are available, a default gray color (RGB: 128, 128, 128) is assigned.
+
+#### Automatic Detection and Fallback
+
+When loading a mesh, FoundationPose automatically:
+
+1. **Checks for texture image**: If the mesh has `TextureVisuals` and the MTL file references an image, it attempts to load the texture.
+2. **Logs status**: 
+   - ✓ Success: `[make_mesh_tensors] ✓ Texture image found and loaded`
+   - ⚠ Warning: `[make_mesh_tensors] ⚠ Texture image is missing (mesh has TextureVisuals but no material image)`
+3. **Prompts user (if texture missing)**: When a texture is expected but missing, the system will prompt you with options:
+   ```
+   ============================================================
+   MESH TEXTURE IMAGE MISSING
+   ============================================================
+   The mesh references a texture but no image file was found.
+   
+   Options:
+     1. Cancel - Exit the program
+     2. Vertex Colors - Use existing vertex colors (if available)
+     3. Default Gray - Proceed with default gray color
+   ============================================================
+   Select option (1/2/3) [default: 3]:
+   ```
+
+#### Common Scenarios
+
+**Scenario 1: MTL file missing texture reference**
+- **Symptom**: MTL file defines material properties but has no `map_Kd` (or similar) line
+- **Result**: System detects `TextureVisuals` but no image, prompts for fallback option
+- **Solution**: Add `map_Kd texture.png` to your MTL file
+
+**Scenario 2: Texture image file missing**
+- **Symptom**: MTL file references an image (e.g., `map_Kd texture.png`) but the file doesn't exist
+- **Result**: System detects missing file, prompts for fallback option
+- **Solution**: Ensure the texture image file exists in the same directory as the MTL file
+
+**Scenario 3: Mesh without texture coordinates**
+- **Symptom**: Mesh has no `vt` (texture coordinate) lines in OBJ file
+- **Result**: System uses vertex colors or default gray
+- **Solution**: This is normal - not all meshes need textures
+
+### Best Practices
+
+1. **Always include `map_Kd` in MTL file if using textures**: Even if other material properties are set, the texture image reference is required.
+
+2. **Keep texture images in the same directory as MTL file**: This ensures relative paths work correctly.
+
+3. **Use descriptive texture filenames**: Names like `texture_diffuse.png` or `shaded.png` are clearer than generic names.
+
+4. **Verify texture file exists**: Before running, ensure the image file referenced in the MTL actually exists.
+
+5. **Test mesh loading**: If you're unsure about your mesh setup, test loading it in a 3D viewer (like Blender or MeshLab) to verify materials load correctly.
+
+### Example: Setting Up a Mesh with Texture
+
+```
+mesh/
+├── object.obj          # Mesh file
+├── object.mtl          # Material file
+└── texture.png          # Texture image
+```
+
+**object.obj** (excerpt):
+```
+mtllib object.mtl
+v -0.5 -0.5 0.0
+v 0.5 -0.5 0.0
+v 0.0 0.5 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 0.5 1.0
+usemtl material.001
+f 1/1 2/2 3/3
+```
+
+**object.mtl**:
+```
+newmtl material.001
+Kd 1.0 1.0 1.0
+map_Kd texture.png
+```
+
+### Troubleshooting Mesh Material Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| "Texture image is missing" prompt | MTL references texture but file missing | Add texture file or remove `map_Kd` line |
+| No texture loaded | MTL file has no `map_Kd` line | Add `map_Kd texture.png` to MTL file |
+| Wrong texture path | Image in different directory | Move image to MTL directory or use correct relative path |
+| Mesh appears gray | No texture or vertex colors | This is expected fallback behavior |
+
 ## Basic Usage
 
 ### Standard Execution (RGB-D Mode with display)

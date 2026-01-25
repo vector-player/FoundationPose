@@ -103,7 +103,8 @@ set_logging_format()
 
 def make_mesh_tensors(mesh, device='cuda', max_tex_size=None):
   mesh_tensors = {}
-  if isinstance(mesh.visual, trimesh.visual.texture.TextureVisuals):
+  if isinstance(mesh.visual, trimesh.visual.texture.TextureVisuals) and mesh.visual.material is not None and mesh.visual.material.image is not None:
+    logging.info("[make_mesh_tensors] ✓ Texture image found and loaded")
     img = np.array(mesh.visual.material.image.convert('RGB'))
     img = img[...,:3]
     if max_tex_size is not None:
@@ -117,10 +118,52 @@ def make_mesh_tensors(mesh, device='cuda', max_tex_size=None):
     uv[:,1] = 1 - uv[:,1]
     mesh_tensors['uv']  = uv
   else:
-    if mesh.visual.vertex_colors is None:
-      logging.info(f"WARN: mesh doesn't have vertex_colors, assigning a pure color")
-      mesh.visual.vertex_colors = np.tile(np.array([128,128,128]).reshape(1,3), (len(mesh.vertices), 1))
-    mesh_tensors['vertex_color'] = torch.as_tensor(mesh.visual.vertex_colors[...,:3], device=device, dtype=torch.float)/255.0
+    # Check if TextureVisuals exists but image is missing
+    if isinstance(mesh.visual, trimesh.visual.texture.TextureVisuals):
+      logging.warning("[make_mesh_tensors] ⚠ Texture image is missing (mesh has TextureVisuals but no material image)")
+      print("\n" + "="*60)
+      print("MESH TEXTURE IMAGE MISSING")
+      print("="*60)
+      print("The mesh references a texture but no image file was found.")
+      print("\nOptions:")
+      print("  1. Cancel - Exit the program")
+      print("  2. Vertex Colors - Use existing vertex colors (if available)")
+      print("  3. Default Gray - Proceed with default gray color")
+      print("="*60)
+      
+      while True:
+        choice = input("Select option (1/2/3) [default: 3]: ").strip().lower()
+        if choice == '' or choice == '3':
+          choice = '3'
+          break
+        elif choice == '1':
+          logging.info("[make_mesh_tensors] User chose to cancel")
+          raise SystemExit("User cancelled: texture image missing")
+        elif choice == '2':
+          break
+        elif choice == '3':
+          break
+        else:
+          print("Invalid choice. Please enter 1, 2, or 3.")
+      
+      if choice == '2':
+        if mesh.visual.vertex_colors is None:
+          logging.warning("[make_mesh_tensors] Vertex colors not available, falling back to default gray")
+          mesh.visual.vertex_colors = np.tile(np.array([128,128,128]).reshape(1,3), (len(mesh.vertices), 1))
+        else:
+          logging.info("[make_mesh_tensors] Using existing vertex colors")
+        mesh_tensors['vertex_color'] = torch.as_tensor(mesh.visual.vertex_colors[...,:3], device=device, dtype=torch.float)/255.0
+      else:  # choice == '3'
+        logging.info("[make_mesh_tensors] Using default gray color")
+        if mesh.visual.vertex_colors is None:
+          mesh.visual.vertex_colors = np.tile(np.array([128,128,128]).reshape(1,3), (len(mesh.vertices), 1))
+        mesh_tensors['vertex_color'] = torch.as_tensor(mesh.visual.vertex_colors[...,:3], device=device, dtype=torch.float)/255.0
+    else:
+      # Not TextureVisuals, use vertex colors or default
+      if mesh.visual.vertex_colors is None:
+        logging.info(f"[make_mesh_tensors] WARN: mesh doesn't have vertex_colors, assigning a pure color")
+        mesh.visual.vertex_colors = np.tile(np.array([128,128,128]).reshape(1,3), (len(mesh.vertices), 1))
+      mesh_tensors['vertex_color'] = torch.as_tensor(mesh.visual.vertex_colors[...,:3], device=device, dtype=torch.float)/255.0
 
   mesh_tensors.update({
     'pos': torch.tensor(mesh.vertices, device=device, dtype=torch.float),
